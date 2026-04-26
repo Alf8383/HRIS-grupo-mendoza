@@ -1,0 +1,33 @@
+server:
+  port: 8080
+  address: 0.0.0.0
+
+spring:
+  application:
+    name: rrhh-api
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/rrhh}
+    username: ${SPRING_DATASOURCE_USERNAME:rrhh}
+    password: ${SPRING_DATASOURCE_PASSWORD:rrhh123}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:change-this-secret-key-with-at-least-thirty-two-chars}
+    expiration-ms: ${APP_JWT_EXPIRATION_MS:86400000}
+  cors:
+    allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:http://localhost:5173}
+  seed:
+    admin:
+      full-name: ${APP_SEED_ADMIN_FULL_NAME:Administrador Sprint 0}
+      email: ${APP_SEED_ADMIN_EMAIL:admin@grupomendoza.com}
+      password: ${APP_SEED_ADMIN_PASSWORD:Admin12345!}

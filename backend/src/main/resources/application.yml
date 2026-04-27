@@ -28,6 +28,6 @@ app:
     allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:http://localhost:5173}
   seed:
     admin:
-      full-name: ${APP_SEED_ADMIN_FULL_NAME:Administrador Sprint 0}
+      full-name: ${APP_SEED_ADMIN_FULL_NAME:Administrador}
       email: ${APP_SEED_ADMIN_EMAIL:admin@grupomendoza.com}
       password: ${APP_SEED_ADMIN_PASSWORD:Admin12345!}

@@ -28,8 +28,8 @@ export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [email, setEmail] = useState('admin@grupomendoza.com')
-  const [password, setPassword] = useState('Admin12345!')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const fromPath =
@@ -66,25 +66,20 @@ export function LoginPage() {
             </div>
             <div className="flex flex-col gap-3">
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-primary">
-                Sprint 0
+                Grupo Mendoza
               </p>
               <h1 className="max-w-xl text-5xl font-semibold tracking-tight text-balance text-foreground">
-                Base técnica lista para el sistema de RR. HH.
+                Gestiona Recursos Humanos desde un solo lugar
               </h1>
               <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
-                Esta primera entrega ya deja corriendo el monorepo, la base de
-                datos, el seed del usuario administrador y la autenticación JWT
-                conectada al frontend.
+                Accede a tu panel para consultar información, revisar tu cuenta
+                y trabajar con los módulos habilitados según tu perfil.
               </p>
             </div>
           </div>
 
           <div className="grid max-w-3xl grid-cols-3 gap-4">
-            {[
-              'React + TypeScript',
-              'Spring Boot + JWT',
-              'PostgreSQL + Flyway',
-            ].map((item) => (
+            {['Personal', 'Asistencia', 'Solicitudes'].map((item) => (
               <Card key={item} className="border-white/60 bg-white/80 shadow-sm">
                 <CardContent className="flex min-h-28 items-end p-5">
                   <p className="text-sm font-medium text-foreground">{item}</p>
@@ -116,7 +111,7 @@ export function LoginPage() {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="admin@grupomendoza.com"
+                  placeholder="correo@empresa.com"
                   autoComplete="email"
                 />
               </div>
@@ -142,12 +137,7 @@ export function LoginPage() {
 
           <CardFooter className="flex flex-col items-start gap-2">
             <p className="text-sm text-muted-foreground">
-              Credenciales seed para entorno local: <strong>admin@grupomendoza.com</strong> /{' '}
-              <strong>Admin12345!</strong>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Estas credenciales se pueden cambiar con variables de entorno del
-              backend.
+              Usa tus credenciales para acceder al sistema.
             </p>
           </CardFooter>
         </Card>

@@ -1,12 +1,16 @@
 import {
-  CheckCircle2,
-  Database,
-  Layers3,
-  Shield,
-  Workflow,
+  Building2,
+  CalendarClock,
+  ClipboardList,
+  Network,
+  Users,
+  BriefcaseBusiness,
 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
+import { StatusBadge } from '@/components/app/status-badge'
 import { useAuth } from '@/contexts/auth-context'
+import { getRoleLabel } from '@/lib/roles'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -17,65 +21,56 @@ import {
 } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 
-const readinessCards = [
-  {
-    title: 'Monorepo',
-    description: 'Frontend, backend y archivos raíz del proyecto.',
-    icon: Layers3,
-  },
-  {
-    title: 'Autenticación',
-    description: 'JWT, login y bootstrap de sesión desde /auth/me.',
-    icon: Shield,
-  },
-  {
-    title: 'Base de datos',
-    description: 'Flyway listo con roles y usuario administrador seed.',
-    icon: Database,
-  },
+const quickLinks = [
+  { title: 'Empleados', to: '/app/employees', icon: Users },
+  { title: 'Cargos', to: '/app/settings/cargos', icon: BriefcaseBusiness },
+  { title: 'Sedes', to: '/app/settings/sedes', icon: Network },
+  { title: 'Asistencia', to: '/app/attendance', icon: CalendarClock },
+  { title: 'Permisos', to: '/app/leave-requests', icon: ClipboardList },
 ]
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const { session } = useAuth()
 
   return (
     <div className="flex flex-col gap-6">
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-        <Card className="border-none bg-[linear-gradient(135deg,_rgba(17,24,39,1)_0%,_rgba(30,41,59,1)_45%,_rgba(37,99,235,0.95)_100%)] text-white shadow-xl">
+        <Card className="rounded-3xl border-none bg-gradient-to-br from-slate-900 via-slate-800 to-primary/90 text-white shadow-xl dark:from-slate-950 dark:via-slate-900 dark:to-primary/80">
           <CardHeader className="flex flex-col gap-3">
             <Badge variant="secondary" className="w-fit bg-white/12 text-white">
-              Sprint 0 implementado
+              Panel principal
             </Badge>
             <CardTitle className="text-3xl font-semibold tracking-tight text-balance">
               Bienvenido, {session?.user.name}
             </CardTitle>
             <CardDescription className="max-w-2xl text-sm leading-7 text-slate-200">
-              La plataforma ya cuenta con autenticación funcional, shell
-              protegido, migraciones iniciales y seed del usuario administrador.
-              El siguiente sprint puede concentrarse en módulos de negocio sin
-              rehacer infraestructura.
+              Accede a los módulos del sistema y mantén centralizada la gestión
+              de la información del personal.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-3">
-            {readinessCards.map((item) => (
-              <div
+            {quickLinks.map((item) => (
+              <button
                 key={item.title}
-                className="rounded-2xl border border-white/10 bg-white/8 p-4 backdrop-blur"
+                type="button"
+                onClick={() => navigate(item.to)}
+                className="rounded-2xl border border-white/10 bg-white/8 p-4 text-left backdrop-blur transition-colors hover:bg-white/12"
               >
                 <item.icon className="size-5 text-white/85" />
                 <p className="mt-4 text-sm font-semibold">{item.title}</p>
-                <p className="mt-2 text-sm text-slate-200">{item.description}</p>
-              </div>
+                <p className="mt-2 text-sm text-slate-200">
+                  Ir al módulo de {item.title.toLowerCase()}.
+                </p>
+              </button>
             ))}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-3xl">
           <CardHeader>
-            <CardTitle>Sesión actual</CardTitle>
-            <CardDescription>
-              Datos cargados desde el backend autenticado.
-            </CardDescription>
+            <CardTitle>Tu cuenta</CardTitle>
+            <CardDescription>Información general de acceso.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-4">
@@ -85,7 +80,7 @@ export function DashboardPage() {
             <Separator />
             <div className="flex items-center justify-between gap-4">
               <span className="text-sm text-muted-foreground">Estado</span>
-              <Badge variant="outline">{session?.user.status}</Badge>
+              {session?.user.status ? <StatusBadge value={session.user.status} /> : null}
             </div>
             <Separator />
             <div className="flex flex-col gap-2">
@@ -93,7 +88,7 @@ export function DashboardPage() {
               <div className="flex flex-wrap gap-2">
                 {session?.user.roles.map((role) => (
                   <Badge key={role} variant="secondary">
-                    {role}
+                    {getRoleLabel(role)}
                   </Badge>
                 ))}
               </div>
@@ -103,52 +98,52 @@ export function DashboardPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="rounded-3xl">
           <CardHeader>
-            <CardTitle>Checklist técnico</CardTitle>
+            <CardTitle>Operación diaria</CardTitle>
             <CardDescription>
-              Lo que ya quedó resuelto para los próximos sprints.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {[
-              'API REST con prefijo /api/v1',
-              'JWT stateless con SecurityFilterChain',
-              'Seed de roles y admin configurable por variables de entorno',
-              'Rutas protegidas y shell por rol en React',
-              'Base Docker Compose para levantar todo el entorno',
-            ].map((item) => (
-              <div key={item} className="flex items-start gap-3">
-                <CheckCircle2 className="mt-0.5 size-4 text-primary" />
-                <p className="text-sm">{item}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Próxima capa del producto</CardTitle>
-            <CardDescription>
-              Módulos que ya pueden apoyarse en esta fundación.
+              Acciones frecuentes dentro del sistema.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="rounded-2xl border bg-muted/40 p-4">
               <div className="flex items-center gap-3">
-                <Workflow className="size-5 text-primary" />
+                <Building2 className="size-5 text-primary" />
                 <div className="flex flex-col gap-1">
-                  <p className="text-sm font-semibold">Sprint 1 recomendado</p>
+                  <p className="text-sm font-semibold">Estructura lista para operar</p>
                   <p className="text-sm text-muted-foreground">
-                    Usuarios, roles, empleados, áreas, cargos y sedes.
+                    Usuarios, empleados y estructura organizacional desde un solo panel.
                   </p>
                 </div>
               </div>
             </div>
             <p className="text-sm leading-7 text-muted-foreground">
-              La navegación ya anticipa los módulos futuros para que podamos
-              conectarlos gradualmente sin rehacer el layout.
+              Usa el menú lateral para moverte entre las secciones habilitadas
+              según tu rol. Recuerda registrar tu asistencia diaria y gestionar
+              tus solicitudes de permisos desde los módulos correspondientes.
             </p>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-3xl">
+          <CardHeader>
+            <CardTitle>Enlaces rápidos</CardTitle>
+            <CardDescription>
+              Navega directamente a los módulos principales.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            {quickLinks.map((item) => (
+              <button
+                key={item.title}
+                type="button"
+                onClick={() => navigate(item.to)}
+                className="flex items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-muted/50"
+              >
+                <item.icon className="size-4 text-primary" />
+                <span className="text-sm font-medium">{item.title}</span>
+              </button>
+            ))}
           </CardContent>
         </Card>
       </section>

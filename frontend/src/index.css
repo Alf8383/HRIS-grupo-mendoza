@@ -131,7 +131,6 @@
     @apply antialiased bg-background text-foreground;
     margin: 0;
     min-height: 100vh;
-    font-family: Inter, "Segoe UI", sans-serif;
   }
 
   #root {

@@ -63,3 +63,10 @@ export async function apiRequest<T>(
 
   return payload.data
 }
+
+export function getApiMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiClientError) {
+    return error.message
+  }
+  return fallback
+}

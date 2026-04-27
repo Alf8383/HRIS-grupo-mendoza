@@ -44,7 +44,7 @@ public class AuthDataSeeder implements ApplicationRunner {
         roleRepository.findByName(roleName).orElseGet(() -> {
             Role role = new Role();
             role.setName(roleName);
-            role.setDescription("Seeded role for Sprint 0.");
+            role.setDescription("Initial system role.");
             return roleRepository.save(role);
         });
     }

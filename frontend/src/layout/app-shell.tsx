@@ -1,18 +1,22 @@
 import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import {
+  CalendarClock,
   BadgeCheck,
   BriefcaseBusiness,
-  CalendarClock,
+  Building2,
   ClipboardList,
   LogOut,
   Menu,
+  Network,
   ShieldCheck,
   Users,
 } from 'lucide-react'
 
+import { StatusBadge } from '@/components/app/status-badge'
 import { useAuth } from '@/contexts/auth-context'
 import { appEnv } from '@/lib/env'
+import { getRoleLabel } from '@/lib/roles'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -41,13 +45,12 @@ type NavItem = {
   to: string
   roles: string[]
   icon: typeof Users
-  isPlaceholder?: boolean
 }
 
 const navItems: NavItem[] = [
   {
     label: 'Dashboard',
-    description: 'Estado general del Sprint 0',
+    description: 'Resumen general',
     to: '/app/dashboard',
     roles: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'],
     icon: BadgeCheck,
@@ -58,7 +61,20 @@ const navItems: NavItem[] = [
     to: '/app/users',
     roles: ['ADMIN'],
     icon: ShieldCheck,
-    isPlaceholder: true,
+  },
+  {
+    label: 'Asistencia',
+    description: 'Control diario y seguimiento',
+    to: '/app/attendance',
+    roles: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'],
+    icon: CalendarClock,
+  },
+  {
+    label: 'Permisos',
+    description: 'Solicitudes y aprobaciones',
+    to: '/app/leave-requests',
+    roles: ['ADMIN', 'HR', 'MANAGER', 'EMPLOYEE'],
+    icon: ClipboardList,
   },
   {
     label: 'Empleados',
@@ -66,31 +82,27 @@ const navItems: NavItem[] = [
     to: '/app/employees',
     roles: ['ADMIN', 'HR'],
     icon: Users,
-    isPlaceholder: true,
   },
   {
-    label: 'Asistencia',
-    description: 'Control diario y reportes',
-    to: '/app/attendance',
-    roles: ['ADMIN', 'HR', 'MANAGER'],
-    icon: ClipboardList,
-    isPlaceholder: true,
+    label: 'Áreas',
+    description: 'Estructura organizacional',
+    to: '/app/settings/areas',
+    roles: ['ADMIN', 'HR'],
+    icon: Building2,
   },
   {
-    label: 'Vacaciones',
-    description: 'Solicitudes y saldos',
-    to: '/app/vacations',
-    roles: ['ADMIN', 'HR', 'EMPLOYEE'],
-    icon: CalendarClock,
-    isPlaceholder: true,
-  },
-  {
-    label: 'Contratos',
-    description: 'Vigencia y renovaciones',
-    to: '/app/contracts',
+    label: 'Cargos',
+    description: 'Asignación por área',
+    to: '/app/settings/cargos',
     roles: ['ADMIN', 'HR'],
     icon: BriefcaseBusiness,
-    isPlaceholder: true,
+  },
+  {
+    label: 'Sedes',
+    description: 'Ubicación operativa',
+    to: '/app/settings/sedes',
+    roles: ['ADMIN', 'HR'],
+    icon: Network,
   },
 ]
 
@@ -105,10 +117,7 @@ function SidebarNav({
     <div className="flex h-full flex-col gap-6">
       <div className="flex flex-col gap-1">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-          Navegación
-        </p>
-        <p className="text-sm text-muted-foreground">
-          Accesos visibles según tu rol activo.
+          Módulos
         </p>
       </div>
 
@@ -121,7 +130,6 @@ function SidebarNav({
             className={({ isActive }) =>
               cn(
                 'group rounded-xl border border-transparent px-3 py-3 transition-colors',
-                item.isPlaceholder && 'opacity-80',
                 isActive
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'bg-background hover:border-border hover:bg-accent',
@@ -141,11 +149,6 @@ function SidebarNav({
                 <div className="flex flex-1 flex-col gap-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">{item.label}</span>
-                    {item.isPlaceholder ? (
-                      <Badge variant={isActive ? 'secondary' : 'outline'}>
-                        Próximamente
-                      </Badge>
-                    ) : null}
                   </div>
                   <span
                     className={cn(
@@ -189,13 +192,11 @@ export function AppShell() {
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <p className="text-sm font-semibold">{appEnv.appName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Plataforma base Sprint 0
-                  </p>
+                  <p className="text-xs text-muted-foreground">Recursos Humanos</p>
                 </div>
               </div>
               <Badge variant="secondary" className="w-fit">
-                Rol actual: {primaryRole}
+                Rol actual: {getRoleLabel(primaryRole)}
               </Badge>
             </div>
 
@@ -230,11 +231,9 @@ export function AppShell() {
 
                 <div className="flex flex-col gap-0.5">
                   <p className="text-sm font-semibold text-foreground">
-                    Panel base del sistema
+                    Panel principal
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Autenticación lista y shell protegido por roles
-                  </p>
+                  <p className="text-xs text-muted-foreground">Gestión de Recursos Humanos</p>
                 </div>
               </div>
 
@@ -268,14 +267,7 @@ export function AppShell() {
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
                     <div className="flex flex-col gap-2 px-2 py-1">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">{primaryRole}</Badge>
-                        <Badge variant="outline">{user?.status}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        El endpoint <code>/auth/me</code> ya está conectado a esta
-                        sesión.
-                      </p>
+                      {user?.status ? <StatusBadge value={user.status} /> : null}
                     </div>
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />

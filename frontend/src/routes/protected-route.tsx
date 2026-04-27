@@ -1,9 +1,14 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
 import { useAuth } from '@/contexts/auth-context'
+import { hasSomeRole } from '@/lib/roles'
 
-export function ProtectedRoute() {
-  const { status } = useAuth()
+type ProtectedRouteProps = {
+  allowedRoles?: string[]
+}
+
+export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
+  const { status, session } = useAuth()
   const location = useLocation()
 
   if (status === 'loading') {
@@ -23,6 +28,10 @@ export function ProtectedRoute() {
 
   if (status !== 'authenticated') {
     return <Navigate replace state={{ from: location }} to="/login" />
+  }
+
+  if (allowedRoles?.length && !hasSomeRole(session?.user.roles, allowedRoles)) {
+    return <Navigate replace to="/app/dashboard" />
   }
 
   return <Outlet />

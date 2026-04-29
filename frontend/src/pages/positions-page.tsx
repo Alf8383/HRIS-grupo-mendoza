@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, PencilLine, Plus, RefreshCcw } from 'lucide-react'
+import { BriefcaseBusiness, Loader2, PencilLine, Plus, RefreshCcw } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { CardSkeleton } from '@/components/app/card-skeleton'
 import { DataTable } from '@/components/app/data-table'
 import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
+import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,6 +18,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -215,10 +218,7 @@ export function PositionsPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Cargando información...
-              </div>
+              <TableSkeleton rows={5} columns={4} />
             ) : (
               <DataTable
                 columns={[
@@ -277,6 +277,7 @@ export function PositionsPage() {
                 getRowKey={(position) => position.id}
                 emptyTitle="No hay cargos registrados"
                 emptyDescription="Aún no existen cargos que coincidan con los filtros actuales."
+                emptyIcon={BriefcaseBusiness}
                 emptyAction={
                   <Button onClick={resetForm} type="button">
                     <Plus />
@@ -289,6 +290,13 @@ export function PositionsPage() {
         </Card>
 
         <div className="flex flex-col gap-6">
+          {loading ? (
+            <>
+              <CardSkeleton header lines={3} />
+              <CardSkeleton header lines={3} />
+            </>
+          ) : (
+            <>
           <Card className="rounded-3xl">
             <CardHeader>
               <CardTitle>{editingId ? 'Editar cargo' : 'Nuevo cargo'}</CardTitle>
@@ -326,9 +334,8 @@ export function PositionsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="position-description">Descripción</Label>
-                  <textarea
+                  <Textarea
                     id="position-description"
-                    className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
                     value={form.description}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, description: event.target.value }))
@@ -387,6 +394,8 @@ export function PositionsPage() {
               )}
             </CardContent>
           </Card>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { Breadcrumb } from '@/components/app/breadcrumb'
 import { PageHeader } from '@/components/app/page-header'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/auth-context'
 import { apiRequest, getApiMessage } from '@/lib/http'
 import type { UserDetail } from '@/types/domain'
@@ -45,6 +47,13 @@ export function UserDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <Breadcrumb
+        items={[
+          { label: 'Usuarios', to: '/app/users' },
+          { label: user?.fullName ?? 'Detalle' },
+        ]}
+      />
+
       <PageHeader
         title="Detalle de usuario"
         description="Consulta la información de la cuenta, su rol operativo y la relación con el registro de empleado."
@@ -59,12 +68,33 @@ export function UserDetailPage() {
       />
 
       {loading ? (
-        <Card className="rounded-3xl">
-          <CardContent className="flex min-h-72 items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 size-4 animate-spin" />
-            Cargando detalle...
-          </CardContent>
-        </Card>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <Card className="rounded-3xl p-6">
+            <Skeleton className="mb-4 h-8 w-64" />
+            <Skeleton className="mb-6 h-4 w-48" />
+            <div className="grid gap-5 md:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-4 w-40" />
+                </div>
+              ))}
+            </div>
+          </Card>
+          <Card className="rounded-3xl p-6">
+            <Skeleton className="mb-4 h-8 w-48" />
+            <Skeleton className="mb-6 h-4 w-56" />
+            <div className="space-y-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-4 w-40" />
+                </div>
+              ))}
+              <Skeleton className="mt-4 h-10 w-full" />
+            </div>
+          </Card>
+        </div>
       ) : user ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
           <Card className="rounded-3xl">
@@ -133,5 +163,3 @@ function DetailItem({
     </div>
   )
 }
-
-

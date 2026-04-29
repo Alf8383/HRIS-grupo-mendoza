@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Eye, Loader2, PencilLine, Plus, RefreshCcw } from 'lucide-react'
+import { Eye, Loader2, PencilLine, Plus, RefreshCcw, Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { CardSkeleton } from '@/components/app/card-skeleton'
 import { DataTable } from '@/components/app/data-table'
 import { PageHeader } from '@/components/app/page-header'
+import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -269,10 +271,7 @@ export function EmployeesPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Cargando información...
-              </div>
+              <TableSkeleton rows={5} columns={4} />
             ) : (
               <DataTable
                 columns={[
@@ -347,6 +346,7 @@ export function EmployeesPage() {
                 getRowKey={(employee) => employee.id}
                 emptyTitle="No hay empleados registrados"
                 emptyDescription="No existen empleados que coincidan con los filtros actuales."
+                emptyIcon={Users}
                 emptyAction={
                   <Button type="button" onClick={resetForm}>
                     <Plus />
@@ -358,6 +358,9 @@ export function EmployeesPage() {
           </CardContent>
         </Card>
 
+        {loading ? (
+          <CardSkeleton header lines={6} />
+        ) : (
         <Card className="rounded-3xl">
           <CardHeader>
             <CardTitle>{editingId ? 'Editar empleado' : 'Nuevo empleado'}</CardTitle>
@@ -500,6 +503,7 @@ export function EmployeesPage() {
             </form>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   )

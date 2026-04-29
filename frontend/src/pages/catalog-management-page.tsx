@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Loader2, PencilLine, Plus, RefreshCcw } from 'lucide-react'
+import { Inbox, Loader2, PencilLine, Plus, RefreshCcw } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { CardSkeleton } from '@/components/app/card-skeleton'
 import { DataTable } from '@/components/app/data-table'
 import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
+import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,6 +18,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -217,10 +220,7 @@ export function CatalogManagementPage({
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Cargando información...
-              </div>
+              <TableSkeleton rows={5} columns={3} />
             ) : (
               <DataTable
                 columns={[
@@ -282,6 +282,7 @@ export function CatalogManagementPage({
                 getRowKey={(item) => item.id}
                 emptyTitle={`No hay ${itemLabel.toLowerCase()} registrados`}
                 emptyDescription="Aún no existen registros que coincidan con los filtros actuales."
+                emptyIcon={Inbox}
                 emptyAction={
                   <Button type="button" onClick={startCreate}>
                     <Plus />
@@ -294,6 +295,13 @@ export function CatalogManagementPage({
         </Card>
 
         <div className="flex flex-col gap-6">
+          {loading ? (
+            <>
+              <CardSkeleton header lines={3} />
+              <CardSkeleton header lines={3} />
+            </>
+          ) : (
+            <>
           <Card className="rounded-3xl">
             <CardHeader>
               <CardTitle>
@@ -319,9 +327,8 @@ export function CatalogManagementPage({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor={`${endpoint}-description`}>Descripción</Label>
-                  <textarea
+                  <Textarea
                     id={`${endpoint}-description`}
-                    className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
                     value={form.description}
                     onChange={(event) =>
                       setForm((current) => ({
@@ -379,6 +386,8 @@ export function CatalogManagementPage({
               )}
             </CardContent>
           </Card>
+            </>
+          )}
         </div>
       </div>
     </div>

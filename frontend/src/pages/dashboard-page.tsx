@@ -2,6 +2,7 @@ import {
   Building2,
   CalendarClock,
   ClipboardList,
+  ChevronRight,
   Network,
   Users,
   BriefcaseBusiness,
@@ -11,6 +12,7 @@ import { useNavigate } from 'react-router-dom'
 import { StatusBadge } from '@/components/app/status-badge'
 import { useAuth } from '@/contexts/auth-context'
 import { getRoleLabel } from '@/lib/roles'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import {
   Card,
@@ -22,16 +24,24 @@ import {
 import { Separator } from '@/components/ui/separator'
 
 const quickLinks = [
-  { title: 'Empleados', to: '/app/employees', icon: Users },
-  { title: 'Cargos', to: '/app/settings/cargos', icon: BriefcaseBusiness },
-  { title: 'Sedes', to: '/app/settings/sedes', icon: Network },
-  { title: 'Asistencia', to: '/app/attendance', icon: CalendarClock },
-  { title: 'Permisos', to: '/app/leave-requests', icon: ClipboardList },
+  { title: 'Empleados', to: '/app/employees', icon: Users, countLabel: 'Ver listado' },
+  { title: 'Cargos', to: '/app/settings/cargos', icon: BriefcaseBusiness, countLabel: 'Ver catálogo' },
+  { title: 'Sedes', to: '/app/settings/sedes', icon: Network, countLabel: 'Ver ubicaciones' },
+  { title: 'Asistencia', to: '/app/attendance', icon: CalendarClock, countLabel: 'Registrar' },
+  { title: 'Permisos', to: '/app/leave-requests', icon: ClipboardList, countLabel: 'Solicitar' },
 ]
 
 export function DashboardPage() {
   const navigate = useNavigate()
   const { session } = useAuth()
+  const user = session?.user
+
+  const userInitials = user?.name
+    .split(' ')
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase()
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,7 +52,7 @@ export function DashboardPage() {
               Panel principal
             </Badge>
             <CardTitle className="text-3xl font-semibold tracking-tight text-balance">
-              Bienvenido, {session?.user.name}
+              Bienvenido, {user?.name}
             </CardTitle>
             <CardDescription className="max-w-2xl text-sm leading-7 text-slate-200">
               Accede a los módulos del sistema y mantén centralizada la gestión
@@ -55,13 +65,16 @@ export function DashboardPage() {
                 key={item.title}
                 type="button"
                 onClick={() => navigate(item.to)}
-                className="rounded-2xl border border-white/10 bg-white/8 p-4 text-left backdrop-blur transition-colors hover:bg-white/12"
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/8 p-4 text-left backdrop-blur transition-all duration-200 ease-out hover:bg-white/12 hover:shadow-lg"
               >
-                <item.icon className="size-5 text-white/85" />
-                <p className="mt-4 text-sm font-semibold">{item.title}</p>
-                <p className="mt-2 text-sm text-slate-200">
-                  Ir al módulo de {item.title.toLowerCase()}.
-                </p>
+                <div className="flex items-start justify-between">
+                  <div className="flex size-9 items-center justify-center rounded-xl bg-white/10 transition-transform duration-200 group-hover:scale-105">
+                    <item.icon className="size-4 text-white/90" />
+                  </div>
+                  <ChevronRight className="size-4 text-white/40 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-white/70" />
+                </div>
+                <p className="mt-3 text-sm font-semibold">{item.title}</p>
+                <p className="mt-1 text-xs text-slate-300">{item.countLabel}</p>
               </button>
             ))}
           </CardContent>
@@ -72,21 +85,30 @@ export function DashboardPage() {
             <CardTitle>Tu cuenta</CardTitle>
             <CardDescription>Información general de acceso.</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-sm text-muted-foreground">Correo</span>
-              <span className="text-sm font-medium">{session?.user.email}</span>
+          <CardContent className="flex flex-col gap-5">
+            <div className="flex items-center gap-3">
+              <Avatar className="size-12 border">
+                <AvatarFallback className="text-sm font-medium">
+                  {userInitials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-medium">{user?.name}</span>
+                <span className="text-xs text-muted-foreground">{user?.email}</span>
+              </div>
             </div>
+
             <Separator />
+
             <div className="flex items-center justify-between gap-4">
               <span className="text-sm text-muted-foreground">Estado</span>
-              {session?.user.status ? <StatusBadge value={session.user.status} /> : null}
+              {user?.status ? <StatusBadge value={user.status} /> : null}
             </div>
             <Separator />
             <div className="flex flex-col gap-2">
               <span className="text-sm text-muted-foreground">Roles</span>
               <div className="flex flex-wrap gap-2">
-                {session?.user.roles.map((role) => (
+                {user?.roles.map((role) => (
                   <Badge key={role} variant="secondary">
                     {getRoleLabel(role)}
                   </Badge>
@@ -108,7 +130,9 @@ export function DashboardPage() {
           <CardContent className="flex flex-col gap-4">
             <div className="rounded-2xl border bg-muted/40 p-4">
               <div className="flex items-center gap-3">
-                <Building2 className="size-5 text-primary" />
+                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
+                  <Building2 className="size-5 text-primary" />
+                </div>
                 <div className="flex flex-col gap-1">
                   <p className="text-sm font-semibold">Estructura lista para operar</p>
                   <p className="text-sm text-muted-foreground">
@@ -138,10 +162,13 @@ export function DashboardPage() {
                 key={item.title}
                 type="button"
                 onClick={() => navigate(item.to)}
-                className="flex items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-muted/50"
+                className="group flex items-center gap-3 rounded-xl border p-3 text-left transition-all duration-200 ease-out hover:bg-muted/50 hover:shadow-sm"
               >
-                <item.icon className="size-4 text-primary" />
+                <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 transition-transform duration-200 group-hover:scale-105">
+                  <item.icon className="size-4 text-primary" />
+                </div>
                 <span className="text-sm font-medium">{item.title}</span>
+                <ChevronRight className="ml-auto size-3.5 text-muted-foreground opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100" />
               </button>
             ))}
           </CardContent>

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarCheck2, CheckCircle2, Clock3, Loader2, RefreshCcw } from 'lucide-react'
+import { CalendarCheck2, CheckCircle2, Clock3, ClipboardList, Loader2, RefreshCcw } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
+import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -283,10 +285,7 @@ export function AttendancePage() {
               </div>
 
               {loadingSelf ? (
-                <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground">
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Cargando tu historial...
-                </div>
+                <TableSkeleton rows={5} columns={4} />
               ) : history.length ? (
                 <div className="overflow-hidden rounded-2xl border">
                   <table className="w-full text-sm">
@@ -323,6 +322,7 @@ export function AttendancePage() {
                 <EmptyState
                   title="No hay registros en el periodo"
                   description="Cuando registres asistencia, tu historial aparecerá aquí."
+                  icon={ClipboardList}
                 />
               )}
             </CardContent>
@@ -490,10 +490,7 @@ export function AttendancePage() {
               ) : null}
 
               {loadingSummary ? (
-                <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground">
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Cargando resumen...
-                </div>
+                <TableSkeleton rows={5} columns={5} />
               ) : summary.length ? (
                 <div className="overflow-hidden rounded-2xl border">
                   <table className="w-full text-sm">
@@ -557,6 +554,7 @@ export function AttendancePage() {
                 <EmptyState
                   title="No hay registros para mostrar"
                   description="Ajusta los filtros o espera nuevas marcaciones para ver resultados aquí."
+                  icon={ClipboardList}
                 />
               )}
             </CardContent>
@@ -574,9 +572,8 @@ export function AttendancePage() {
                 <form className="space-y-4" onSubmit={submitJustification}>
                   <div className="space-y-2">
                     <Label htmlFor="attendance-justification-note">Motivo</Label>
-                    <textarea
+                    <Textarea
                       id="attendance-justification-note"
-                      className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={justificationNote}
                       onChange={(event) => setJustificationNote(event.target.value)}
                       placeholder="Describe el motivo de la justificación"

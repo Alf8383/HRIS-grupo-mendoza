@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Loader2, RefreshCcw, SendHorizontal } from 'lucide-react'
+import { ClipboardList, Loader2, RefreshCcw, SendHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { DataTable } from '@/components/app/data-table'
 import { PageHeader } from '@/components/app/page-header'
+import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -262,10 +264,7 @@ export function LeaveRequestsPage() {
               </div>
 
               {loading ? (
-                <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground">
-                  <Loader2 className="mr-2 size-4 animate-spin" />
-                  Cargando solicitudes...
-                </div>
+                <TableSkeleton rows={4} columns={4} />
               ) : (
                 <DataTable
                   columns={[
@@ -323,6 +322,7 @@ export function LeaveRequestsPage() {
                   getRowKey={(request) => request.id}
                   emptyTitle="No hay solicitudes registradas"
                   emptyDescription="Tus solicitudes aparecerán aquí cuando las envíes."
+                  emptyIcon={ClipboardList}
                 />
               )}
             </CardContent>
@@ -383,9 +383,8 @@ export function LeaveRequestsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="leave-reason">Motivo</Label>
-                  <textarea
+                  <Textarea
                     id="leave-reason"
-                    className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
                     value={form.reason}
                     onChange={(event) =>
                       setForm((current) => ({ ...current, reason: event.target.value }))
@@ -448,10 +447,7 @@ export function LeaveRequestsPage() {
             </div>
 
             {loading ? (
-              <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Cargando solicitudes del equipo...
-              </div>
+              <TableSkeleton rows={4} columns={4} />
             ) : (
               <DataTable
                 columns={[
@@ -518,6 +514,7 @@ export function LeaveRequestsPage() {
                 getRowKey={(request) => request.id}
                 emptyTitle="No hay solicitudes del equipo"
                 emptyDescription="Las solicitudes del personal de tu área aparecerán aquí."
+                emptyIcon={ClipboardList}
               />
             )}
           </CardContent>
@@ -568,10 +565,7 @@ export function LeaveRequestsPage() {
             </div>
 
             {loading ? (
-              <div className="flex min-h-56 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Cargando solicitudes globales...
-              </div>
+              <TableSkeleton rows={4} columns={4} />
             ) : (
               <DataTable
                 columns={[
@@ -646,6 +640,7 @@ export function LeaveRequestsPage() {
                 getRowKey={(request) => request.id}
                 emptyTitle="No hay solicitudes para mostrar"
                 emptyDescription="La vista global se llenará cuando existan solicitudes registradas."
+                emptyIcon={ClipboardList}
               />
             )}
           </CardContent>
@@ -664,9 +659,8 @@ export function LeaveRequestsPage() {
             <form className="space-y-4" onSubmit={handleReview}>
               <div className="space-y-2">
                 <Label htmlFor="leave-review-comment">Comentario</Label>
-                <textarea
+                <Textarea
                   id="leave-review-comment"
-                  className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm"
                   value={reviewComment}
                   onChange={(event) => setReviewComment(event.target.value)}
                   placeholder="Escribe una observación sobre la decisión"

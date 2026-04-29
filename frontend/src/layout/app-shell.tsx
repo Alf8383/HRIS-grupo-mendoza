@@ -13,6 +13,7 @@ import {
   Users,
 } from 'lucide-react'
 
+import { PageTransition } from '@/components/app/page-transition'
 import { StatusBadge } from '@/components/app/status-badge'
 import { useAuth } from '@/contexts/auth-context'
 import { appEnv } from '@/lib/env'
@@ -129,10 +130,10 @@ function SidebarNav({
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                'group rounded-xl border border-transparent px-3 py-3 transition-colors',
+                'group relative rounded-xl border border-transparent px-3 py-2.5 transition-all duration-200 ease-out',
                 isActive
                   ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'bg-background hover:border-border hover:bg-accent',
+                  : 'bg-background hover:border-border hover:bg-accent hover:shadow-sm',
               )
             }
           >
@@ -146,21 +147,22 @@ function SidebarNav({
                       : 'text-muted-foreground',
                   )}
                 />
-                <div className="flex flex-1 flex-col gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </div>
+                <div className="flex flex-1 flex-col gap-0.5">
+                  <span className="text-sm font-medium">{item.label}</span>
                   <span
                     className={cn(
-                      'text-xs',
+                      'text-[11px] leading-tight',
                       isActive
-                        ? 'text-primary-foreground/80'
-                        : 'text-muted-foreground',
+                        ? 'text-primary-foreground/70'
+                        : 'text-muted-foreground/80',
                     )}
                   >
                     {item.description}
                   </span>
                 </div>
+                {isActive ? (
+                  <span className="absolute left-0 top-1/2 hidden h-6 w-0.5 -translate-y-1/2 rounded-full bg-primary-foreground lg:block" />
+                ) : null}
               </div>
             )}
           </NavLink>
@@ -221,10 +223,12 @@ export function AppShell() {
                       <SheetTitle>{appEnv.appName}</SheetTitle>
                     </SheetHeader>
                     <div className="px-5 py-4">
-                      <SidebarNav
-                        items={visibleItems}
-                        onNavigate={() => setMobileOpen(false)}
-                      />
+                      <div className="animate-in slide-in-from-left-2 fade-in duration-300">
+                        <SidebarNav
+                          items={visibleItems}
+                          onNavigate={() => setMobileOpen(false)}
+                        />
+                      </div>
                     </div>
                   </SheetContent>
                 </Sheet>
@@ -286,7 +290,9 @@ export function AppShell() {
           </header>
 
           <main className="flex-1 px-4 py-5 lg:px-6 lg:py-6">
-            <Outlet />
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
           </main>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { EmptyState } from '@/components/app/empty-state'
@@ -15,6 +16,7 @@ type DataTableProps<T> = {
   emptyTitle: string
   emptyDescription: string
   emptyAction?: ReactNode
+  emptyIcon?: LucideIcon
   getRowKey: (row: T) => string | number
 }
 
@@ -24,6 +26,7 @@ export function DataTable<T>({
   emptyTitle,
   emptyDescription,
   emptyAction,
+  emptyIcon,
   getRowKey,
 }: DataTableProps<T>) {
   if (!rows.length) {
@@ -32,6 +35,7 @@ export function DataTable<T>({
         title={emptyTitle}
         description={emptyDescription}
         action={emptyAction}
+        icon={emptyIcon}
       />
     )
   }
@@ -39,7 +43,7 @@ export function DataTable<T>({
   return (
     <div className="overflow-hidden rounded-2xl border">
       <table className="w-full text-sm">
-        <thead className="bg-muted/50 text-left">
+        <thead className="sticky top-0 z-10 bg-muted/95 text-left backdrop-blur supports-[backdrop-filter]:bg-muted/80">
           <tr>
             {columns.map((col) => (
               <th
@@ -55,7 +59,7 @@ export function DataTable<T>({
           {rows.map((row) => (
             <tr
               key={getRowKey(row)}
-              className="border-t transition-colors hover:bg-muted/30"
+              className="border-t transition-colors duration-150 hover:bg-muted/40"
             >
               {columns.map((col) => (
                 <td

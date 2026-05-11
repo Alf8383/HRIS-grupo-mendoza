@@ -1,6 +1,6 @@
-# RRHH Capstone - Sprint 0
+# RRHH Capstone
 
-Base técnica inicial del sistema web de Recursos Humanos para Grupo Mendoza.
+Sistema web de Recursos Humanos para Grupo Mendoza.
 
 ## Stack
 - Frontend: React + TypeScript + Vite
@@ -9,6 +9,20 @@ Base técnica inicial del sistema web de Recursos Humanos para Grupo Mendoza.
 - Base de datos: PostgreSQL
 - Infraestructura local: Docker Compose
 
+## Estado actual
+El proyecto ya incluye:
+
+- autenticación con JWT
+- gestión de usuarios
+- gestión de empleados
+- gestión de áreas, cargos y sedes
+- control de asistencia con marcación manual
+- historial y resumen de asistencia por rol
+- cierre diario de inasistencias
+- justificación de tardanzas e inasistencias
+- solicitudes de permisos y licencias
+- aprobación o rechazo de solicitudes por rol
+
 ## Estructura del proyecto
 ```text
 RRHH-Capstone/
@@ -16,19 +30,21 @@ RRHH-Capstone/
 ├── frontend/
 ├── docker-compose.yml
 ├── .env.example
-├── Backlog inicial.md
+├── Backlog-inicial.md
 └── README.md
 ```
 
-## Qué incluye Sprint 0
-- Monorepo funcional con `frontend/` y `backend/`
-- Docker Compose para levantar frontend, backend y PostgreSQL
-- Migración inicial con Flyway
-- Seed de roles `ADMIN`, `HR`, `MANAGER`, `EMPLOYEE`
-- Seed de usuario administrador configurable por variables de entorno
-- Login con JWT
-- Endpoint `/api/v1/auth/me`
-- Shell protegido en frontend con visibilidad básica por rol
+## Módulos backend
+Dominios principales disponibles:
+
+- `auth`
+- `user`
+- `employee`
+- `area`
+- `position`
+- `site`
+- `attendance`
+- `leave`
 
 ## Requisitos
 - Docker Desktop
@@ -36,7 +52,7 @@ RRHH-Capstone/
 - Java 21 y Maven para desarrollo local opcional
 
 ## Variables de entorno
-Usa `.env.example` como referencia. Los valores importantes son:
+Usa `.env.example` como referencia.
 
 ### Frontend
 - `VITE_APP_NAME`
@@ -63,6 +79,7 @@ docker compose up --build
 ```
 
 Servicios disponibles:
+
 - Frontend: [http://localhost:5173](http://localhost:5173)
 - Backend: [http://localhost:8080/api/v1/health](http://localhost:8080/api/v1/health)
 - PostgreSQL: `localhost:5432`
@@ -73,15 +90,24 @@ Por defecto:
 - Email: `admin@grupomendoza.com`
 - Password: `Admin12345!`
 
-Estas credenciales salen de las variables `APP_SEED_ADMIN_EMAIL` y `APP_SEED_ADMIN_PASSWORD`.
+Estas credenciales salen de:
 
-## Cómo funcionan las migraciones
-- Flyway corre automáticamente al iniciar el backend.
-- La migración actual crea únicamente el esquema mínimo de autenticación:
-  - `roles`
-  - `users`
-  - `user_roles`
-- El seed de datos corre al iniciar la aplicación y crea roles base y un admin si no existen.
+- `APP_SEED_ADMIN_EMAIL`
+- `APP_SEED_ADMIN_PASSWORD`
+
+## Migraciones
+Flyway corre automáticamente al iniciar el backend.
+
+Migraciones actuales:
+
+- `V1__init_auth_schema.sql`
+- `V2__add_organization_and_employees.sql`
+- `V3__add_attendance_and_leave_requests.sql`
+
+El seed inicial crea:
+
+- roles base `ADMIN`, `HR`, `MANAGER`, `EMPLOYEE`
+- usuario administrador si no existe
 
 ## Desarrollo local sin Docker
 
@@ -98,15 +124,17 @@ npm install
 npm run dev
 ```
 
-## Sprint 0 done checklist
-- `docker compose up --build` levanta los tres servicios
+## Verificación rápida
+- `docker compose up --build` levanta frontend, backend y base de datos
 - `GET /api/v1/health` responde `ok`
-- El admin seed puede iniciar sesión
-- El frontend redirige a `/app/dashboard` después del login
+- el usuario administrador puede iniciar sesión
+- el frontend redirige a `/app/dashboard` después del login
 - `/api/v1/auth/me` responde con el usuario autenticado
-- Las rutas protegidas bloquean el acceso sin token
+- las rutas protegidas restringen acceso según rol
+- `GET /api/v1/attendance/summary` responde correctamente
+- `GET /api/v1/leave-requests/all` responde correctamente para usuarios autorizados
 
 ## Notas
-- Sprint 0 no incluye módulos de negocio todavía.
-- La persistencia del token en `localStorage` es una decisión temporal para esta etapa.
-- La administración dinámica de permisos por módulo queda para Sprint 1.
+- la asistencia biométrica todavía no está integrada; la base quedó preparada para una integración futura
+- el token se mantiene en `localStorage` por ahora
+- el sistema usa roles fijos en esta etapa; no hay matriz dinámica de permisos por módulo

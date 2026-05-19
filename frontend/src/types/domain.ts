@@ -81,6 +81,9 @@ export type EmployeeDetail = {
   siteName: string
   employeeStatus: string
   userStatus: string
+  vacationAvailableDays: number
+  vacationUsedDays: number
+  vacationPendingDays: number
 }
 
 export type TodayAttendance = {
@@ -149,4 +152,137 @@ export type LeaveRequestRecord = {
   reviewedAt: string | null
   reviewComment: string | null
   createdAt: string
+}
+
+export type VacationBalance = {
+  employeeId: number
+  employeeName: string
+  availableDays: number
+  usedDays: number
+  pendingDays: number
+  notes: string | null
+}
+
+export type VacationRequestRecord = {
+  id: number
+  employeeId: number
+  employeeName: string
+  employeeEmail: string
+  areaName: string
+  positionName: string
+  siteName: string
+  startDate: string
+  endDate: string
+  requestedDays: number
+  observation: string | null
+  status: string
+  reviewedByName: string | null
+  reviewedAt: string | null
+  reviewComment: string | null
+  createdAt: string
+}
+
+export type ContractRecord = {
+  id: number
+  employeeId: number
+  employeeName: string
+  employeeEmail: string
+  areaName: string
+  positionName: string
+  siteName: string
+  contractType: string
+  startDate: string
+  endDate: string | null
+  status: string
+  notes: string | null
+  previousContractId: number | null
+}
+
+export type ExpiringContractItem = {
+  id: number
+  employeeId: number
+  employeeName: string
+  areaName: string
+  positionName: string
+  contractType: string
+  endDate: string
+  daysUntilExpiration: number
+}
+
+export type EmployeeReportRow = {
+  employeeId: number
+  fullName: string
+  email: string
+  role: string
+  dni: string
+  phone: string | null
+  hireDate: string
+  areaName: string
+  positionName: string
+  siteName: string
+  employeeStatus: string
+}
+
+export type AttendanceReportRow = {
+  recordId: number
+  employeeId: number
+  employeeName: string
+  employeeEmail: string
+  areaName: string
+  positionName: string
+  siteName: string
+  attendanceDate: string
+  checkInAt: string | null
+  checkOutAt: string | null
+  status: string
+  lateMinutes: number | null
+  source: string
+  notes: string | null
+  justificationNote: string | null
+}
+
+export type RequestReportRow = {
+  sourceGroup: string
+  requestId: number
+  employeeId: number
+  employeeName: string
+  employeeEmail: string
+  areaName: string
+  positionName: string
+  siteName: string
+  requestType: string
+  requestStatus: string
+  startValue: string
+  endValue: string
+  reasonOrObservation: string | null
+  reviewedByName: string | null
+  reviewComment: string | null
+  createdAt: string
+}
+
+export type ExpiringContractReportRow = {
+  contractId: number
+  employeeId: number
+  employeeName: string
+  employeeEmail: string
+  areaName: string
+  positionName: string
+  siteName: string
+  contractType: string
+  startDate: string
+  endDate: string
+  status: string
+  daysUntilExpiration: number
+}
+
+export type AuditLogRecord = {
+  id: number
+  eventAt: string
+  userId: number | null
+  userEmail: string | null
+  module: string
+  action: string
+  entityType: string
+  entityId: number | null
+  summary: string
 }

@@ -31,6 +31,8 @@ services:
       APP_SEED_ADMIN_FULL_NAME: ${APP_SEED_ADMIN_FULL_NAME:-Administrador}
       APP_SEED_ADMIN_EMAIL: ${APP_SEED_ADMIN_EMAIL:-admin@grupomendoza.com}
       APP_SEED_ADMIN_PASSWORD: ${APP_SEED_ADMIN_PASSWORD:-Admin12345!}
+      APP_SEED_DEMO_ENABLED: ${APP_SEED_DEMO_ENABLED:-true}
+      APP_SEED_DEMO_DEFAULT_PASSWORD: ${APP_SEED_DEMO_DEFAULT_PASSWORD:-Demo12345!}
     depends_on:
       db:
         condition: service_healthy

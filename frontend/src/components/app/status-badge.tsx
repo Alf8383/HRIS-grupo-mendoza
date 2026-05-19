@@ -16,6 +16,8 @@ const LABELS: Record<string, string> = {
   APPROVED: 'Aprobado',
   REJECTED: 'Rechazado',
   CANCELLED: 'Cancelado',
+  EXPIRED: 'Vencido',
+  TERMINATED: 'Terminado',
 }
 
 const STYLES: Record<string, string> = {
@@ -30,6 +32,8 @@ const STYLES: Record<string, string> = {
   REJECTED: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-900',
   JUSTIFIED_LATE: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900',
   JUSTIFIED_ABSENT: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900',
+  EXPIRED: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-900',
+  TERMINATED: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
 }
 
 export function StatusBadge({ value }: StatusBadgeProps) {

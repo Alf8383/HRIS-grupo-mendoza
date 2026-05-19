@@ -3,6 +3,8 @@ package com.grupomendoza.rrhh.admin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -65,6 +67,32 @@ class AdminManagementControllerTest {
 
         mockMvc.perform(get("/api/v1/users")
                         .header("Authorization", "Bearer " + hrToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void adminCannotUseOwnLeaveEndpointsWithoutEmployeeProfile() throws Exception {
+        String adminToken = loginAndGetToken("admin@grupomendoza.com", "Admin12345!");
+
+        mockMvc.perform(get("/api/v1/leave-requests/my")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+
+        mockMvc.perform(post("/api/v1/leave-requests")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestType": "PERSONAL_PERMISSION",
+                                  "startAt": "2026-05-05T09:00:00",
+                                  "endAt": "2026-05-05T12:00:00",
+                                  "reason": "Intento no permitido"
+                                }
+                                """))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
@@ -563,6 +591,532 @@ class AdminManagementControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    void managerApprovesVacationAndBalanceIsUpdated() throws Exception {
+        String adminToken = loginAndGetToken("admin@grupomendoza.com", "Admin12345!");
+        long suffix = System.nanoTime();
+
+        Long areaId = createResourceAndExtractId(
+                "/api/v1/areas",
+                adminToken,
+                """
+                        {
+                          "name": "Area vacaciones %d",
+                          "description": "Area vacaciones"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long siteId = createResourceAndExtractId(
+                "/api/v1/sites",
+                adminToken,
+                """
+                        {
+                          "name": "Sede vacaciones %d",
+                          "description": "Sede vacaciones"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long managerPositionId = createResourceAndExtractId(
+                "/api/v1/positions",
+                adminToken,
+                """
+                        {
+                          "name": "Jefatura vacaciones %d",
+                          "description": "Jefatura vacaciones",
+                          "areaId": %d
+                        }
+                        """.formatted(suffix, areaId)
+        );
+
+        Long employeePositionId = createResourceAndExtractId(
+                "/api/v1/positions",
+                adminToken,
+                """
+                        {
+                          "name": "Analista vacaciones %d",
+                          "description": "Analista vacaciones",
+                          "areaId": %d
+                        }
+                        """.formatted(suffix, areaId)
+        );
+
+        String managerEmail = "vacmanager" + suffix + "@grupomendoza.com";
+        String employeeEmail = "vacemployee" + suffix + "@grupomendoza.com";
+
+        createResourceAndExtractId(
+                "/api/v1/employees",
+                adminToken,
+                employeePayload(78000000 + (suffix % 1000000), "Manager Vacaciones " + suffix, managerEmail, managerPositionId, siteId, "MANAGER")
+        );
+
+        Long employeeId = createResourceAndExtractId(
+                "/api/v1/employees",
+                adminToken,
+                employeePayload(79000000 + (suffix % 1000000), "Empleado Vacaciones " + suffix, employeeEmail, employeePositionId, siteId, "EMPLOYEE")
+        );
+
+        mockMvc.perform(put("/api/v1/vacations/balance/{employeeId}", employeeId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availableDays": 15,
+                                  "usedDays": 0,
+                                  "pendingDays": 0,
+                                  "notes": "Saldo inicial"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.availableDays").value(15));
+
+        String employeeToken = loginAndGetToken(employeeEmail, "ClaveTemporal123!");
+        String managerToken = loginAndGetToken(managerEmail, "ClaveTemporal123!");
+
+        String vacationBody = mockMvc.perform(post("/api/v1/vacations/requests")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "startDate": "2026-06-01",
+                                  "endDate": "2026-06-03",
+                                  "observation": "Vacaciones familiares"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.requestedDays").value(3))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        Long vacationRequestId = objectMapper.readTree(vacationBody).path("data").path("id").asLong();
+
+        mockMvc.perform(post("/api/v1/vacations/requests/{id}/approve", vacationRequestId)
+                        .header("Authorization", "Bearer " + managerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reviewComment": "Aprobado por jefatura"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("APPROVED"));
+
+        mockMvc.perform(get("/api/v1/vacations/balance/{employeeId}", employeeId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.availableDays").value(15))
+                .andExpect(jsonPath("$.data.usedDays").value(3))
+                .andExpect(jsonPath("$.data.pendingDays").value(0));
+    }
+
+    @Test
+    void vacationRequestCannotExceedAvailableBalance() throws Exception {
+        String adminToken = loginAndGetToken("admin@grupomendoza.com", "Admin12345!");
+        long suffix = System.nanoTime();
+
+        Long areaId = createResourceAndExtractId(
+                "/api/v1/areas",
+                adminToken,
+                """
+                        {
+                          "name": "Area saldo %d",
+                          "description": "Area saldo"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long siteId = createResourceAndExtractId(
+                "/api/v1/sites",
+                adminToken,
+                """
+                        {
+                          "name": "Sede saldo %d",
+                          "description": "Sede saldo"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long positionId = createResourceAndExtractId(
+                "/api/v1/positions",
+                adminToken,
+                """
+                        {
+                          "name": "Cargo saldo %d",
+                          "description": "Cargo saldo",
+                          "areaId": %d
+                        }
+                        """.formatted(suffix, areaId)
+        );
+
+        String employeeEmail = "saldo" + suffix + "@grupomendoza.com";
+        Long employeeId = createResourceAndExtractId(
+                "/api/v1/employees",
+                adminToken,
+                employeePayload(80000000 + (suffix % 1000000), "Empleado Saldo " + suffix, employeeEmail, positionId, siteId, "EMPLOYEE")
+        );
+
+        mockMvc.perform(put("/api/v1/vacations/balance/{employeeId}", employeeId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availableDays": 2,
+                                  "usedDays": 0,
+                                  "pendingDays": 0,
+                                  "notes": null
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        String employeeToken = loginAndGetToken(employeeEmail, "ClaveTemporal123!");
+
+        mockMvc.perform(post("/api/v1/vacations/requests")
+                        .header("Authorization", "Bearer " + employeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "startDate": "2026-06-10",
+                                  "endDate": "2026-06-13",
+                                  "observation": "Exceso de saldo"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("CONFLICT"));
+    }
+
+    @Test
+    void hrCanCreateRenewAndListExpiringContracts() throws Exception {
+        String adminToken = loginAndGetToken("admin@grupomendoza.com", "Admin12345!");
+        String hrToken = loginAndGetToken("hr@grupomendoza.com", "Admin12345!");
+        long suffix = System.nanoTime();
+
+        Long areaId = createResourceAndExtractId(
+                "/api/v1/areas",
+                adminToken,
+                """
+                        {
+                          "name": "Area contratos %d",
+                          "description": "Area contratos"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long siteId = createResourceAndExtractId(
+                "/api/v1/sites",
+                adminToken,
+                """
+                        {
+                          "name": "Sede contratos %d",
+                          "description": "Sede contratos"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long positionId = createResourceAndExtractId(
+                "/api/v1/positions",
+                adminToken,
+                """
+                        {
+                          "name": "Cargo contratos %d",
+                          "description": "Cargo contratos",
+                          "areaId": %d
+                        }
+                        """.formatted(suffix, areaId)
+        );
+
+        String employeeEmail = "contract" + suffix + "@grupomendoza.com";
+        Long employeeId = createResourceAndExtractId(
+                "/api/v1/employees",
+                adminToken,
+                employeePayload(81000000 + (suffix % 1000000), "Empleado Contrato " + suffix, employeeEmail, positionId, siteId, "EMPLOYEE")
+        );
+
+        LocalDate expiringDate = LocalDate.now().plusDays(15);
+        String contractBody = mockMvc.perform(post("/api/v1/contracts")
+                        .header("Authorization", "Bearer " + hrToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "employeeId": %d,
+                                  "contractType": "FIXED_TERM",
+                                  "startDate": "2026-01-01",
+                                  "endDate": "%s",
+                                  "status": "ACTIVE",
+                                  "notes": "Contrato inicial"
+                                }
+                                """.formatted(employeeId, expiringDate)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.contractType").value("FIXED_TERM"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        Long contractId = objectMapper.readTree(contractBody).path("data").path("id").asLong();
+
+        mockMvc.perform(post("/api/v1/contracts/{id}/renew", contractId)
+                        .header("Authorization", "Bearer " + hrToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "contractType": "INDEFINITE",
+                                  "startDate": "2026-12-01",
+                                  "endDate": null,
+                                  "status": "ACTIVE",
+                                  "notes": "Renovación indefinida"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previousContractId").value(contractId))
+                .andExpect(jsonPath("$.data.contractType").value("INDEFINITE"));
+
+        mockMvc.perform(get("/api/v1/contracts/employee/{employeeId}", employeeId)
+                        .header("Authorization", "Bearer " + hrToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(2));
+
+        mockMvc.perform(get("/api/v1/contracts/expiring")
+                        .header("Authorization", "Bearer " + hrToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.employeeId == %d)]".formatted(employeeId)).isNotEmpty());
+    }
+
+    @Test
+    void adminCanQueryAuditLogsAndEmployeeReports() throws Exception {
+        String adminToken = loginAndGetToken("admin@grupomendoza.com", "Admin12345!");
+        long suffix = System.nanoTime();
+
+        Long areaId = createResourceAndExtractId(
+                "/api/v1/areas",
+                adminToken,
+                """
+                        {
+                          "name": "Area reporte %d",
+                          "description": "Area reporte"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long siteId = createResourceAndExtractId(
+                "/api/v1/sites",
+                adminToken,
+                """
+                        {
+                          "name": "Sede reporte %d",
+                          "description": "Sede reporte"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long positionId = createResourceAndExtractId(
+                "/api/v1/positions",
+                adminToken,
+                """
+                        {
+                          "name": "Cargo reporte %d",
+                          "description": "Cargo reporte",
+                          "areaId": %d
+                        }
+                        """.formatted(suffix, areaId)
+        );
+
+        String employeeEmail = "report" + suffix + "@grupomendoza.com";
+        String employeeName = "Empleado Reporte " + suffix;
+
+        createResourceAndExtractId(
+                "/api/v1/employees",
+                adminToken,
+                employeePayload(82000000 + (suffix % 1000000), employeeName, employeeEmail, positionId, siteId, "EMPLOYEE")
+        );
+
+        mockMvc.perform(get("/api/v1/audit-logs")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("module", "EMPLOYEE")
+                        .param("action", "CREATE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].module").value("EMPLOYEE"))
+                .andExpect(jsonPath("$.data[0].action").value("CREATE"));
+
+        mockMvc.perform(get("/api/v1/reports/employees")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("search", employeeName))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].fullName").value(employeeName))
+                .andExpect(jsonPath("$.data[0].siteName").value("Sede reporte " + suffix));
+
+        mockMvc.perform(get("/api/v1/reports/employees/export")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("search", employeeName))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"reporte-empleados.xlsx\""))
+                .andExpect(header().string("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+    }
+
+    @Test
+    void managerCanViewScopedRequestReportAndHrCanExportExpiringContracts() throws Exception {
+        String adminToken = loginAndGetToken("admin@grupomendoza.com", "Admin12345!");
+        String hrToken = loginAndGetToken("hr@grupomendoza.com", "Admin12345!");
+        long suffix = System.nanoTime();
+
+        Long areaOneId = createResourceAndExtractId(
+                "/api/v1/areas",
+                adminToken,
+                """
+                        {
+                          "name": "Area reportes manager %d",
+                          "description": "Area reportes manager"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long areaTwoId = createResourceAndExtractId(
+                "/api/v1/areas",
+                adminToken,
+                """
+                        {
+                          "name": "Area reportes externa %d",
+                          "description": "Area reportes externa"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long siteId = createResourceAndExtractId(
+                "/api/v1/sites",
+                adminToken,
+                """
+                        {
+                          "name": "Sede reportes %d",
+                          "description": "Sede reportes"
+                        }
+                        """.formatted(suffix)
+        );
+
+        Long managerPositionId = createResourceAndExtractId(
+                "/api/v1/positions",
+                adminToken,
+                """
+                        {
+                          "name": "Jefatura reportes %d",
+                          "description": "Jefatura reportes",
+                          "areaId": %d
+                        }
+                        """.formatted(suffix, areaOneId)
+        );
+
+        Long teamPositionId = createResourceAndExtractId(
+                "/api/v1/positions",
+                adminToken,
+                """
+                        {
+                          "name": "Analista reportes %d",
+                          "description": "Analista reportes",
+                          "areaId": %d
+                        }
+                        """.formatted(suffix, areaOneId)
+        );
+
+        Long externalPositionId = createResourceAndExtractId(
+                "/api/v1/positions",
+                adminToken,
+                """
+                        {
+                          "name": "Analista reportes externo %d",
+                          "description": "Analista reportes externo",
+                          "areaId": %d
+                        }
+                        """.formatted(suffix, areaTwoId)
+        );
+
+        String managerEmail = "managerreport" + suffix + "@grupomendoza.com";
+        String teamEmployeeEmail = "teamreport" + suffix + "@grupomendoza.com";
+        String externalEmployeeEmail = "externalreport" + suffix + "@grupomendoza.com";
+
+        createResourceAndExtractId(
+                "/api/v1/employees",
+                adminToken,
+                employeePayload(83000000 + (suffix % 1000000), "Manager Reportes " + suffix, managerEmail, managerPositionId, siteId, "MANAGER")
+        );
+
+        Long teamEmployeeId = createResourceAndExtractId(
+                "/api/v1/employees",
+                adminToken,
+                employeePayload(84000000 + (suffix % 1000000), "Team Reportes " + suffix, teamEmployeeEmail, teamPositionId, siteId, "EMPLOYEE")
+        );
+
+        Long externalEmployeeId = createResourceAndExtractId(
+                "/api/v1/employees",
+                adminToken,
+                employeePayload(85000000 + (suffix % 1000000), "External Reportes " + suffix, externalEmployeeEmail, externalPositionId, siteId, "EMPLOYEE")
+        );
+
+        mockMvc.perform(put("/api/v1/vacations/balance/{employeeId}", teamEmployeeId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "availableDays": 10,
+                                  "usedDays": 0,
+                                  "pendingDays": 0,
+                                  "notes": "Saldo de pruebas"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        String managerToken = loginAndGetToken(managerEmail, "ClaveTemporal123!");
+        String teamEmployeeToken = loginAndGetToken(teamEmployeeEmail, "ClaveTemporal123!");
+        String externalEmployeeToken = loginAndGetToken(externalEmployeeEmail, "ClaveTemporal123!");
+
+        createLeaveRequestAndExtractId(teamEmployeeToken, "Permiso visible para manager");
+
+        mockMvc.perform(post("/api/v1/vacations/requests")
+                        .header("Authorization", "Bearer " + teamEmployeeToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "startDate": "2026-07-01",
+                                  "endDate": "2026-07-02",
+                                  "observation": "Vacaciones visibles para manager"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        createLeaveRequestAndExtractId(externalEmployeeToken, "Permiso externo no visible");
+
+        mockMvc.perform(get("/api/v1/reports/requests")
+                        .header("Authorization", "Bearer " + managerToken)
+                        .param("startDate", "2026-05-01")
+                        .param("endDate", "2026-07-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[?(@.employeeEmail == '%s')]".formatted(teamEmployeeEmail)).isNotEmpty())
+                .andExpect(jsonPath("$.data[?(@.employeeEmail == '%s' && @.sourceGroup == 'VACATION')]".formatted(teamEmployeeEmail)).isNotEmpty())
+                .andExpect(jsonPath("$.data[?(@.employeeEmail == '%s')]".formatted(externalEmployeeEmail)).isEmpty());
+
+        LocalDate expiringDate = LocalDate.now().plusDays(10);
+        mockMvc.perform(post("/api/v1/contracts")
+                        .header("Authorization", "Bearer " + hrToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "employeeId": %d,
+                                  "contractType": "FIXED_TERM",
+                                  "startDate": "2026-01-01",
+                                  "endDate": "%s",
+                                  "status": "ACTIVE",
+                                  "notes": "Contrato para exportación"
+                                }
+                                """.formatted(teamEmployeeId, expiringDate)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/reports/contracts/expiring/export")
+                        .header("Authorization", "Bearer " + hrToken)
+                        .param("thresholdDays", "30"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", "attachment; filename=\"reporte-contratos-por-vencer.xlsx\""))
+                .andExpect(header().string("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
     }
 
     private Long createResourceAndExtractId(String path, String token, String content) throws Exception {

@@ -1,15 +1,18 @@
 package com.grupomendoza.rrhh.employee;
 
+import com.grupomendoza.rrhh.audit.AuditService;
 import com.grupomendoza.rrhh.common.api.ApiResponse;
 import com.grupomendoza.rrhh.common.api.StatusUpdateRequest;
 import com.grupomendoza.rrhh.employee.dto.CreateEmployeeRequest;
 import com.grupomendoza.rrhh.employee.dto.EmployeeDetailResponse;
 import com.grupomendoza.rrhh.employee.dto.EmployeeListItemResponse;
 import com.grupomendoza.rrhh.employee.dto.UpdateEmployeeRequest;
+import com.grupomendoza.rrhh.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,9 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
 public class EmployeeController {
     private final EmployeeService employeeService;
+    private final AuditService auditService;
 
-    public EmployeeController(EmployeeService employeeService) {
+    public EmployeeController(EmployeeService employeeService, AuditService auditService) {
         this.employeeService = employeeService;
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -47,24 +52,40 @@ public class EmployeeController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<EmployeeDetailResponse>> create(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestBody CreateEmployeeRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(employeeService.create(request)));
+        EmployeeDetailResponse response = employeeService.create(request);
+        auditService.record(currentUser, "EMPLOYEE", "CREATE", "EMPLOYEE", response.id(), "Empleado creado: " + response.fullName());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<EmployeeDetailResponse>> update(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long id,
             @Valid @RequestBody UpdateEmployeeRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(employeeService.update(id, request)));
+        EmployeeDetailResponse response = employeeService.update(id, request);
+        auditService.record(currentUser, "EMPLOYEE", "UPDATE", "EMPLOYEE", response.id(), "Empleado actualizado: " + response.fullName());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<EmployeeDetailResponse>> updateStatus(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long id,
             @Valid @RequestBody StatusUpdateRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(employeeService.updateStatus(id, request.status())));
+        EmployeeDetailResponse response = employeeService.updateStatus(id, request.status());
+        auditService.record(
+                currentUser,
+                "EMPLOYEE",
+                "ACTIVE".equalsIgnoreCase(response.employeeStatus()) ? "ACTIVATE" : "DEACTIVATE",
+                "EMPLOYEE",
+                response.id(),
+                "Estado de empleado actualizado a " + response.employeeStatus() + ": " + response.fullName()
+        );
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

@@ -22,3 +22,6 @@ app:
       full-name: Admin Test
       email: admin@grupomendoza.com
       password: Admin12345!
+    demo:
+      enabled: false
+      default-password: Demo12345!

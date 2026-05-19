@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, FileBadge2 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -18,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/contexts/auth-context'
 import { formatDate } from '@/lib/format'
 import { apiRequest, getApiMessage } from '@/lib/http'
-import type { EmployeeDetail } from '@/types/domain'
+import type { ContractRecord, EmployeeDetail } from '@/types/domain'
 
 export function EmployeeDetailPage() {
   const { id } = useParams()
@@ -26,6 +26,7 @@ export function EmployeeDetailPage() {
   const token = session?.token ?? ''
 
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null)
+  const [contracts, setContracts] = useState<ContractRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -34,10 +35,16 @@ export function EmployeeDetailPage() {
     const loadEmployee = async () => {
       setLoading(true)
       try {
-        const response = await apiRequest<EmployeeDetail>(`/employees/${id}`, {
-          token,
-        })
-        setEmployee(response)
+        const [employeeResponse, contractsResponse] = await Promise.all([
+          apiRequest<EmployeeDetail>(`/employees/${id}`, {
+            token,
+          }),
+          apiRequest<ContractRecord[]>(`/contracts/employee/${id}`, {
+            token,
+          }),
+        ])
+        setEmployee(employeeResponse)
+        setContracts(contractsResponse)
       } catch (error) {
         toast.error(getApiMessage(error, 'No se pudo cargar el detalle del empleado.'))
       } finally {
@@ -131,6 +138,82 @@ export function EmployeeDetailPage() {
               </Button>
             </CardContent>
           </Card>
+
+          <Card className="rounded-3xl xl:col-span-2">
+            <CardHeader>
+              <CardTitle>Vacaciones</CardTitle>
+              <CardDescription>
+                Resumen del saldo actual asociado al empleado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-3">
+              <VacationStat
+                label="Disponibles"
+                value={employee.vacationAvailableDays}
+              />
+              <VacationStat label="Usados" value={employee.vacationUsedDays} />
+              <VacationStat
+                label="Pendientes"
+                value={employee.vacationPendingDays}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl xl:col-span-2">
+            <CardHeader>
+              <CardTitle>Historial contractual</CardTitle>
+              <CardDescription>
+                Vigencia y renovaciones registradas para este colaborador.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {contracts.length ? (
+                <div className="overflow-hidden rounded-2xl border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 text-left">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Tipo</th>
+                        <th className="px-4 py-3 font-medium">Vigencia</th>
+                        <th className="px-4 py-3 font-medium">Estado</th>
+                        <th className="px-4 py-3 font-medium">Notas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contracts.map((contract) => (
+                        <tr key={contract.id} className="border-t hover:bg-muted/30">
+                          <td className="px-4 py-3 align-top">
+                            <p className="font-medium">{getContractTypeLabel(contract.contractType)}</p>
+                            {contract.previousContractId ? (
+                              <p className="text-xs text-muted-foreground">
+                                Renovación de #{contract.previousContractId}
+                              </p>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            <p>{formatDate(contract.startDate)}</p>
+                            <p className="text-muted-foreground">
+                              {contract.endDate ? formatDate(contract.endDate) : 'Sin fecha fin'}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            <StatusBadge value={contract.status} />
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            {contract.notes ?? 'Sin notas'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
+                  <FileBadge2 className="mx-auto mb-3 size-5" />
+                  No hay contratos registrados para este empleado.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       ) : (
         <Card className="rounded-3xl">
@@ -141,6 +224,30 @@ export function EmployeeDetailPage() {
       )}
     </div>
   )
+}
+
+function VacationStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border bg-muted/30 p-4">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-semibold">{value}</p>
+    </div>
+  )
+}
+
+function getContractTypeLabel(value: string) {
+  switch (value) {
+    case 'FIXED_TERM':
+      return 'Plazo fijo'
+    case 'INDEFINITE':
+      return 'Indefinido'
+    case 'TEMPORARY':
+      return 'Temporal'
+    case 'INTERNSHIP':
+      return 'Prácticas'
+    default:
+      return value
+  }
 }
 
 function DetailItem({

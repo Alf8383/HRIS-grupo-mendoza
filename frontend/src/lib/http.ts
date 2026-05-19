@@ -64,6 +64,49 @@ export async function apiRequest<T>(
   return payload.data
 }
 
+export async function downloadApiFile(
+  path: string,
+  options: RequestOptions = {},
+): Promise<void> {
+  const headers = new Headers(options.headers)
+  headers.set('Accept', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+  if (options.token) {
+    headers.set('Authorization', `Bearer ${options.token}`)
+  }
+
+  const response = await fetch(`${appEnv.apiBaseUrl}${path}`, {
+    ...options,
+    headers,
+  })
+
+  if (!response.ok) {
+    const payload =
+      ((await response.json().catch(() => null)) as ApiEnvelope<unknown> | null) ?? null
+
+    throw new ApiClientError(
+      payload?.error?.message ?? 'No se pudo completar la operación.',
+      response.status,
+      payload?.error?.code,
+      payload?.error?.details,
+    )
+  }
+
+  const blob = await response.blob()
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const filenameMatch = disposition.match(/filename="?([^"]+)"?/)
+  const filename = filenameMatch?.[1] ?? 'reporte.xlsx'
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 export function getApiMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiClientError) {
     return error.message

@@ -15,6 +15,8 @@ import com.grupomendoza.rrhh.site.SiteService;
 import com.grupomendoza.rrhh.user.User;
 import com.grupomendoza.rrhh.user.UserService;
 import com.grupomendoza.rrhh.user.UserStatus;
+import com.grupomendoza.rrhh.vacation.VacationBalance;
+import com.grupomendoza.rrhh.vacation.VacationBalanceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,19 +30,22 @@ public class EmployeeService {
     private final PositionService positionService;
     private final SiteService siteService;
     private final PasswordEncoder passwordEncoder;
+    private final VacationBalanceRepository vacationBalanceRepository;
 
     public EmployeeService(
             EmployeeRepository employeeRepository,
             UserService userService,
             PositionService positionService,
             SiteService siteService,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            VacationBalanceRepository vacationBalanceRepository
     ) {
         this.employeeRepository = employeeRepository;
         this.userService = userService;
         this.positionService = positionService;
         this.siteService = siteService;
         this.passwordEncoder = passwordEncoder;
+        this.vacationBalanceRepository = vacationBalanceRepository;
     }
 
     @Transactional(readOnly = true)
@@ -158,6 +163,7 @@ public class EmployeeService {
         RoleName role = extractRole(employee.getUser());
         Position position = employee.getPosition();
         Site site = employee.getSite();
+        VacationBalance balance = vacationBalanceRepository.findDetailedByEmployeeId(employee.getId()).orElse(null);
 
         return new EmployeeDetailResponse(
                 employee.getId(),
@@ -176,7 +182,10 @@ public class EmployeeService {
                 site.getId(),
                 site.getName(),
                 employee.getStatus().name(),
-                employee.getUser().getStatus().name()
+                employee.getUser().getStatus().name(),
+                balance != null ? balance.getAvailableDays() : 0,
+                balance != null ? balance.getUsedDays() : 0,
+                balance != null ? balance.getPendingDays() : 0
         );
     }
 

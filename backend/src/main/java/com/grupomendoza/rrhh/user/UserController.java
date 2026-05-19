@@ -1,7 +1,9 @@
 package com.grupomendoza.rrhh.user;
 
+import com.grupomendoza.rrhh.audit.AuditService;
 import com.grupomendoza.rrhh.common.api.ApiResponse;
 import com.grupomendoza.rrhh.common.api.StatusUpdateRequest;
+import com.grupomendoza.rrhh.security.AuthenticatedUser;
 import com.grupomendoza.rrhh.user.dto.CreateUserRequest;
 import com.grupomendoza.rrhh.user.dto.UpdateUserRequest;
 import com.grupomendoza.rrhh.user.dto.UserDetailResponse;
@@ -10,6 +12,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,9 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize("hasRole('ADMIN')")
 public class UserController {
     private final UserService userService;
+    private final AuditService auditService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, AuditService auditService) {
         this.userService = userService;
+        this.auditService = auditService;
     }
 
     @GetMapping
@@ -45,23 +50,41 @@ public class UserController {
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<UserDetailResponse>> create(@Valid @RequestBody CreateUserRequest request) {
-        return ResponseEntity.ok(ApiResponse.success(userService.create(request)));
+    public ResponseEntity<ApiResponse<UserDetailResponse>> create(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @Valid @RequestBody CreateUserRequest request
+    ) {
+        UserDetailResponse response = userService.create(request);
+        auditService.record(currentUser, "USER", "CREATE", "USER", response.id(), "Usuario creado: " + response.email());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UserDetailResponse>> update(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long id,
             @Valid @RequestBody UpdateUserRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(userService.update(id, request)));
+        UserDetailResponse response = userService.update(id, request);
+        auditService.record(currentUser, "USER", "UPDATE", "USER", response.id(), "Usuario actualizado: " + response.email());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<ApiResponse<UserDetailResponse>> updateStatus(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
             @PathVariable Long id,
             @Valid @RequestBody StatusUpdateRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(userService.updateStatus(id, request.status())));
+        UserDetailResponse response = userService.updateStatus(id, request.status());
+        auditService.record(
+                currentUser,
+                "USER",
+                "ACTIVE".equalsIgnoreCase(response.status()) ? "ACTIVATE" : "DEACTIVATE",
+                "USER",
+                response.id(),
+                "Estado de usuario actualizado a " + response.status() + ": " + response.email()
+        );
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

@@ -19,6 +19,9 @@ public record EmployeeDetailResponse(
         Long siteId,
         String siteName,
         String employeeStatus,
-        String userStatus
+        String userStatus,
+        Integer vacationAvailableDays,
+        Integer vacationUsedDays,
+        Integer vacationPendingDays
 ) {
 }

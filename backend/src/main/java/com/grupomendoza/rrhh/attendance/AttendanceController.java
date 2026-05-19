@@ -7,6 +7,7 @@ import com.grupomendoza.rrhh.attendance.dto.CheckOutRequest;
 import com.grupomendoza.rrhh.attendance.dto.CloseDayRequest;
 import com.grupomendoza.rrhh.attendance.dto.JustifyAttendanceRequest;
 import com.grupomendoza.rrhh.attendance.dto.TodayAttendanceResponse;
+import com.grupomendoza.rrhh.audit.AuditService;
 import com.grupomendoza.rrhh.common.api.ApiResponse;
 import com.grupomendoza.rrhh.security.AuthenticatedUser;
 import jakarta.validation.Valid;
@@ -28,9 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/attendance")
 public class AttendanceController {
     private final AttendanceService attendanceService;
+    private final AuditService auditService;
 
-    public AttendanceController(AttendanceService attendanceService) {
+    public AttendanceController(AttendanceService attendanceService, AuditService auditService) {
         this.attendanceService = attendanceService;
+        this.auditService = auditService;
     }
 
     @PostMapping("/check-in")
@@ -39,10 +42,12 @@ public class AttendanceController {
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestBody(required = false) CheckInRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(attendanceService.checkIn(
+        AttendanceRecordResponse response = attendanceService.checkIn(
                 currentUser,
                 request == null ? new CheckInRequest(null) : request
-        )));
+        );
+        auditService.record(currentUser, "ATTENDANCE", "CHECK_IN", "ATTENDANCE_RECORD", response.id(), "Entrada registrada para la fecha " + response.attendanceDate());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PostMapping("/check-out")
@@ -51,10 +56,12 @@ public class AttendanceController {
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestBody(required = false) CheckOutRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(attendanceService.checkOut(
+        AttendanceRecordResponse response = attendanceService.checkOut(
                 currentUser,
                 request == null ? new CheckOutRequest(null) : request
-        )));
+        );
+        auditService.record(currentUser, "ATTENDANCE", "CHECK_OUT", "ATTENDANCE_RECORD", response.id(), "Salida registrada para la fecha " + response.attendanceDate());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @GetMapping("/me/today")
@@ -95,7 +102,9 @@ public class AttendanceController {
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @Valid @RequestBody CloseDayRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(attendanceService.closeDay(currentUser, request.attendanceDate())));
+        List<AttendanceSummaryItemResponse> response = attendanceService.closeDay(currentUser, request.attendanceDate());
+        auditService.record(currentUser, "ATTENDANCE", "CLOSE_DAY", "ATTENDANCE_RECORD", null, "Cierre diario ejecutado para " + request.attendanceDate() + " con " + response.size() + " inasistencia(s).");
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 
     @PatchMapping("/{id}/justify")
@@ -105,6 +114,8 @@ public class AttendanceController {
             @PathVariable Long id,
             @Valid @RequestBody JustifyAttendanceRequest request
     ) {
-        return ResponseEntity.ok(ApiResponse.success(attendanceService.justify(currentUser, id, request.justificationNote())));
+        AttendanceSummaryItemResponse response = attendanceService.justify(currentUser, id, request.justificationNote());
+        auditService.record(currentUser, "ATTENDANCE", "JUSTIFY", "ATTENDANCE_RECORD", response.id(), "Registro justificado para " + response.employeeName() + " en " + response.attendanceDate());
+        return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

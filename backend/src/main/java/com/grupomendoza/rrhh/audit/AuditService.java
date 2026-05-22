@@ -61,13 +61,17 @@ public class AuditService {
                 ? endDate.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().minusMillis(1)
                 : null;
 
-        return auditLogRepository.search(
-                        normalizeNullable(userSearch),
-                        normalizeNullable(module),
-                        normalizeNullable(action),
-                        startAt,
-                        endAt
-                ).stream()
+        String normalizedUserSearch = normalizeNullable(userSearch);
+        String normalizedModule = normalizeNullable(module);
+        String normalizedAction = normalizeNullable(action);
+
+        return auditLogRepository.findAllByOrderByEventAtDescIdDesc().stream()
+                .filter(log -> normalizedUserSearch == null
+                        || log.getUserEmail() != null && log.getUserEmail().toLowerCase().contains(normalizedUserSearch))
+                .filter(log -> normalizedModule == null || normalizedModule.equalsIgnoreCase(log.getModule()))
+                .filter(log -> normalizedAction == null || normalizedAction.equalsIgnoreCase(log.getAction()))
+                .filter(log -> startAt == null || !log.getEventAt().isBefore(startAt))
+                .filter(log -> endAt == null || !log.getEventAt().isAfter(endAt))
                 .map(log -> new AuditLogResponse(
                         log.getId(),
                         log.getEventAt(),
@@ -86,6 +90,6 @@ public class AuditService {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return value.trim();
+        return value.trim().toLowerCase();
     }
 }

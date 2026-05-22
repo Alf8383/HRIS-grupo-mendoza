@@ -31,6 +31,24 @@ app:
       full-name: ${APP_SEED_ADMIN_FULL_NAME:Administrador}
       email: ${APP_SEED_ADMIN_EMAIL:admin@grupomendoza.com}
       password: ${APP_SEED_ADMIN_PASSWORD:Admin12345!}
+    admin-secondary:
+      enabled: ${APP_SEED_ADMIN_SECONDARY_ENABLED:true}
+      full-name: ${APP_SEED_ADMIN_SECONDARY_FULL_NAME:Administrador Secundario}
+      email: ${APP_SEED_ADMIN_SECONDARY_EMAIL:admin2@grupomendoza.com}
+      password: ${APP_SEED_ADMIN_SECONDARY_PASSWORD:Admin12345!}
+    users:
+      hr-enabled: ${APP_SEED_HR_ENABLED:true}
+      hr-full-name: ${APP_SEED_HR_FULL_NAME:Recursos Humanos Semilla}
+      hr-email: ${APP_SEED_HR_EMAIL:hr.seed@grupomendoza.com}
+      hr-password: ${APP_SEED_HR_PASSWORD:Seed12345!}
+      manager-enabled: ${APP_SEED_MANAGER_ENABLED:true}
+      manager-full-name: ${APP_SEED_MANAGER_FULL_NAME:Jefatura Semilla}
+      manager-email: ${APP_SEED_MANAGER_EMAIL:manager.seed@grupomendoza.com}
+      manager-password: ${APP_SEED_MANAGER_PASSWORD:Seed12345!}
+      employee-enabled: ${APP_SEED_EMPLOYEE_ENABLED:true}
+      employee-full-name: ${APP_SEED_EMPLOYEE_FULL_NAME:Colaborador Semilla}
+      employee-email: ${APP_SEED_EMPLOYEE_EMAIL:empleado.seed@grupomendoza.com}
+      employee-password: ${APP_SEED_EMPLOYEE_PASSWORD:Seed12345!}
     demo:
       enabled: ${APP_SEED_DEMO_ENABLED:false}
       default-password: ${APP_SEED_DEMO_DEFAULT_PASSWORD:Demo12345!}

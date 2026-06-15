@@ -10,6 +10,7 @@ public record EmployeeListItemResponse(
         String role,
         String roleLabel,
         String dni,
+        String biometricCode,
         String phone,
         LocalDate hireDate,
         String areaName,

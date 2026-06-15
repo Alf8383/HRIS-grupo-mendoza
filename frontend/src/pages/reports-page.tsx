@@ -2,15 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Building2,
   CalendarClock,
+  CalendarDays,
   CheckCircle2,
+  Clock3,
   ClipboardList,
   Download,
   FileBadge2,
   FileSpreadsheet,
+  Hourglass,
   Loader2,
   Percent,
   RefreshCcw,
   TimerReset,
+  Trophy,
   TriangleAlert,
   UserCheck,
   UserX,
@@ -69,6 +73,52 @@ const CONTRACT_TYPE_LABELS: Record<string, string> = {
 const REQUEST_GROUP_LABELS: Record<string, string> = {
   LEAVE: 'Permisos y licencias',
   VACATION: 'Vacaciones',
+}
+
+type RankedKpi = {
+  value: string
+  description: string
+}
+
+function formatMinutes(totalMinutes: number) {
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  if (hours === 0) return `${minutes} min`
+  if (minutes === 0) return `${hours} h`
+  return `${hours} h ${minutes} min`
+}
+
+function topEmployeeByStatus(items: AttendanceReportRow[], statuses: string[]): RankedKpi {
+  const counts = new Map<string, number>()
+
+  items
+    .filter((item) => statuses.includes(item.status))
+    .forEach((item) => {
+      counts.set(item.employeeName, (counts.get(item.employeeName) ?? 0) + 1)
+    })
+
+  const top = Array.from(counts.entries()).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]
+
+  return top
+    ? { value: `${top[1]} caso(s)`, description: top[0] }
+    : { value: '0 caso(s)', description: 'Sin datos en el periodo' }
+}
+
+function topDayByAbsences(items: AttendanceReportRow[], absentStatuses: string[]): RankedKpi {
+  const counts = new Map<string, number>()
+
+  items
+    .filter((item) => absentStatuses.includes(item.status))
+    .forEach((item) => {
+      counts.set(item.attendanceDate, (counts.get(item.attendanceDate) ?? 0) + 1)
+    })
+
+  const top = Array.from(counts.entries()).sort((left, right) => right[1] - left[1] || right[0].localeCompare(left[0]))[0]
+
+  return top
+    ? { value: `${top[1]} falta(s)`, description: formatDate(top[0]) }
+    : { value: '0 falta(s)', description: 'Sin ausencias en el periodo' }
 }
 
 export function ReportsPage() {
@@ -352,7 +402,7 @@ export function ReportsPage() {
     if (activeTab === 'attendance') {
       const absentStatuses = ['ABSENT', 'JUSTIFIED_ABSENT']
       const lateStatuses = ['LATE', 'JUSTIFIED_LATE']
-      const presentCount = attendanceRows.filter((row) => !absentStatuses.includes(row.status)).length
+      const punctualCount = attendanceRows.filter((row) => row.status === 'PRESENT').length
       const lateCount = attendanceRows.filter((row) => lateStatuses.includes(row.status)).length
       const absentCount = attendanceRows.filter((row) => absentStatuses.includes(row.status)).length
       const lateRows = attendanceRows.filter((row) => (row.lateMinutes ?? 0) > 0)
@@ -362,34 +412,66 @@ export function ReportsPage() {
             / lateRows.length,
           )
         : 0
-      const attendanceRate = attendanceRows.length
-        ? Math.round((presentCount / attendanceRows.length) * 100)
+      const punctualityRate = attendanceRows.length
+        ? Math.round((punctualCount / attendanceRows.length) * 100)
         : 0
+      const absenteeismRate = attendanceRows.length
+        ? Math.round((absentCount / attendanceRows.length) * 100)
+        : 0
+      const workedMinutes = attendanceRows.reduce((total, row) => total + (row.workedMinutes ?? 0), 0)
+      const extraMinutes = attendanceRows.reduce((total, row) => total + (row.extraMinutes ?? 0), 0)
+      const topLateEmployee = topEmployeeByStatus(attendanceRows, lateStatuses)
+      const topAbsentEmployee = topEmployeeByStatus(attendanceRows, absentStatuses)
+      const topAbsentDay = topDayByAbsences(attendanceRows, absentStatuses)
 
       return [
         {
-          title: 'Tasa de asistencia',
-          value: `${attendanceRate}%`,
-          description: `${presentCount} de ${attendanceRows.length} registro(s)`,
-          icon: Percent,
+          title: 'Horas trabajadas',
+          value: formatMinutes(workedMinutes),
+          description: 'Total importado desde marcaciones',
+          icon: Hourglass,
         },
         {
-          title: 'Presentes',
-          value: presentCount,
-          description: 'Incluye tardanzas justificadas y no justificadas',
-          icon: UserCheck,
+          title: 'Horas extra',
+          value: formatMinutes(extraMinutes),
+          description: 'Tiempo adicional registrado',
+          icon: Clock3,
         },
         {
-          title: 'Tardanzas',
-          value: lateCount,
-          description: `${averageLateMinutes} min promedio`,
+          title: 'Promedio tardanza',
+          value: `${averageLateMinutes} min`,
+          description: `${lateCount} tardanza(s)`,
           icon: TimerReset,
         },
         {
-          title: 'Inasistencias',
-          value: absentCount,
-          description: 'Ausencias justificadas y pendientes',
+          title: 'Top tardanzas',
+          value: topLateEmployee.value,
+          description: topLateEmployee.description,
+          icon: Trophy,
+        },
+        {
+          title: 'Top faltas',
+          value: topAbsentEmployee.value,
+          description: topAbsentEmployee.description,
+          icon: UserX,
+        },
+        {
+          title: 'Puntualidad',
+          value: `${punctualityRate}%`,
+          description: `${punctualCount} registro(s) puntuales`,
+          icon: Percent,
+        },
+        {
+          title: 'Ausentismo',
+          value: `${absenteeismRate}%`,
+          description: `${absentCount} inasistencia(s)`,
           icon: TriangleAlert,
+        },
+        {
+          title: 'Día crítico',
+          value: topAbsentDay.value,
+          description: topAbsentDay.description,
+          icon: CalendarDays,
         },
       ]
     }
@@ -514,7 +596,7 @@ export function ReportsPage() {
                     id="report-employees-search"
                     value={employeeSearch}
                     onChange={(event) => setEmployeeSearch(event.target.value)}
-                    placeholder="Nombre, correo o DNI"
+                    placeholder="Nombre, correo, DNI o código biométrico"
                     className="rounded-lg border-border/60"
                   />
                 </div>
@@ -857,6 +939,12 @@ export function ReportsPage() {
                       <div>
                         <p className="font-medium">{row.fullName}</p>
                         <p className="text-muted-foreground">{row.email}</p>
+                        <p className="text-xs text-muted-foreground">DNI: {row.dni}</p>
+                        {row.biometricCode ? (
+                          <p className="text-xs text-muted-foreground">
+                            Código biométrico: {row.biometricCode}
+                          </p>
+                        ) : null}
                       </div>
                     ),
                   },
@@ -955,6 +1043,9 @@ export function ReportsPage() {
                       <div>
                         <p className="text-sm text-muted-foreground">
                           {row.notes || row.justificationNote || 'Sin observaciones'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Trabajo: {formatMinutes(row.workedMinutes ?? 0)} · Extra: {formatMinutes(row.extraMinutes ?? 0)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Origen: {row.source}

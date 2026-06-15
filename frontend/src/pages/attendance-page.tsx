@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CalendarCheck2,
+  CalendarDays,
   CheckCircle2,
   ClipboardList,
   Clock3,
+  FileSpreadsheet,
+  Hourglass,
   Percent,
+  Upload,
   TimerReset,
+  Trophy,
   TriangleAlert,
-  UserCheck,
+  UserX,
   Loader2,
   RefreshCcw,
 } from 'lucide-react'
@@ -48,6 +53,7 @@ import type {
   AttendanceSummaryItem,
   EmployeeRecord,
   TodayAttendance,
+  ZktecoImportResult,
 } from '@/types/domain'
 
 const SELF_SERVICE_ROLES = ['EMPLOYEE', 'MANAGER']
@@ -62,11 +68,59 @@ const emptyToday: TodayAttendance = {
   checkOutAt: null,
   status: null,
   lateMinutes: null,
+  workedMinutes: null,
+  extraMinutes: null,
   source: null,
   notes: null,
   justificationNote: null,
   justifiedByName: null,
   justifiedAt: null,
+}
+
+type RankedKpi = {
+  value: string
+  description: string
+}
+
+function formatMinutes(totalMinutes: number) {
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+
+  if (hours === 0) return `${minutes} min`
+  if (minutes === 0) return `${hours} h`
+  return `${hours} h ${minutes} min`
+}
+
+function topEmployeeByStatus(items: AttendanceSummaryItem[], statuses: string[]): RankedKpi {
+  const counts = new Map<string, number>()
+
+  items
+    .filter((item) => statuses.includes(item.status))
+    .forEach((item) => {
+      counts.set(item.employeeName, (counts.get(item.employeeName) ?? 0) + 1)
+    })
+
+  const top = Array.from(counts.entries()).sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]
+
+  return top
+    ? { value: `${top[1]} caso(s)`, description: top[0] }
+    : { value: '0 caso(s)', description: 'Sin datos en el periodo' }
+}
+
+function topDayByAbsences(items: AttendanceSummaryItem[], absentStatuses: string[]): RankedKpi {
+  const counts = new Map<string, number>()
+
+  items
+    .filter((item) => absentStatuses.includes(item.status))
+    .forEach((item) => {
+      counts.set(item.attendanceDate, (counts.get(item.attendanceDate) ?? 0) + 1)
+    })
+
+  const top = Array.from(counts.entries()).sort((left, right) => right[1] - left[1] || right[0].localeCompare(left[0]))[0]
+
+  return top
+    ? { value: `${top[1]} falta(s)`, description: formatDate(top[0]) }
+    : { value: '0 falta(s)', description: 'Sin ausencias en el periodo' }
 }
 
 export function AttendancePage() {
@@ -94,10 +148,14 @@ export function AttendancePage() {
   const [closeDayConfirmOpen, setCloseDayConfirmOpen] = useState(false)
   const [justificationTarget, setJustificationTarget] = useState<AttendanceSummaryItem | null>(null)
   const [justificationNote, setJustificationNote] = useState('')
+  const [zktecoImportOpen, setZktecoImportOpen] = useState(false)
+  const [zktecoFile, setZktecoFile] = useState<File | null>(null)
+  const [zktecoImportResult, setZktecoImportResult] = useState<ZktecoImportResult | null>(null)
   const [loadingSelf, setLoadingSelf] = useState(showSelfService)
   const [loadingSummary, setLoadingSummary] = useState(showSummary)
   const [submitting, setSubmitting] = useState(false)
   const [closingDay, setClosingDay] = useState(false)
+  const [importingZkteco, setImportingZkteco] = useState(false)
 
   const loadEmployees = useCallback(async () => {
     if (!token || !isGlobalView) {
@@ -229,6 +287,33 @@ export function AttendancePage() {
     }
   }
 
+  const submitZktecoImport = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!zktecoFile) {
+      toast.error('Selecciona un archivo Excel de ZKTECO.')
+      return
+    }
+
+    const formData = new FormData()
+    formData.append('file', zktecoFile)
+    setImportingZkteco(true)
+
+    try {
+      const response = await apiRequest<ZktecoImportResult>('/attendance/imports/zkteco', {
+        method: 'POST',
+        token,
+        body: formData,
+      })
+      setZktecoImportResult(response)
+      toast.success('Importación ZKTECO completada.')
+      await Promise.all([loadEmployees(), loadSummary()])
+    } catch (error) {
+      toast.error(getApiMessage(error, 'No se pudo importar el archivo ZKTECO.'))
+    } finally {
+      setImportingZkteco(false)
+    }
+  }
+
   const submitJustification = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!justificationTarget) return
@@ -259,6 +344,7 @@ export function AttendancePage() {
     const absentStatuses = ['ABSENT', 'JUSTIFIED_ABSENT']
     const lateStatuses = ['LATE', 'JUSTIFIED_LATE']
     const presentCount = summary.filter((item) => !absentStatuses.includes(item.status)).length
+    const punctualCount = summary.filter((item) => item.status === 'PRESENT').length
     const lateCount = summary.filter((item) => lateStatuses.includes(item.status)).length
     const absentCount = summary.filter((item) => absentStatuses.includes(item.status)).length
     const lateRecords = summary.filter((item) => item.lateMinutes > 0)
@@ -269,14 +355,29 @@ export function AttendancePage() {
         )
       : 0
     const attendanceRate = total ? Math.round((presentCount / total) * 100) : 0
+    const punctualityRate = total ? Math.round((punctualCount / total) * 100) : 0
+    const absenteeismRate = total ? Math.round((absentCount / total) * 100) : 0
+    const workedMinutes = summary.reduce((minutes, item) => minutes + (item.workedMinutes ?? 0), 0)
+    const extraMinutes = summary.reduce((minutes, item) => minutes + (item.extraMinutes ?? 0), 0)
+    const topLateEmployee = topEmployeeByStatus(summary, lateStatuses)
+    const topAbsentEmployee = topEmployeeByStatus(summary, absentStatuses)
+    const topAbsentDay = topDayByAbsences(summary, absentStatuses)
 
     return {
       total,
       presentCount,
+      punctualCount,
       lateCount,
       absentCount,
       averageLateMinutes,
       attendanceRate,
+      punctualityRate,
+      absenteeismRate,
+      workedMinutes,
+      extraMinutes,
+      topLateEmployee,
+      topAbsentEmployee,
+      topAbsentDay,
     }
   }, [summary])
 
@@ -390,16 +491,31 @@ export function AttendancePage() {
         title="Asistencia"
         description="Consulta la jornada diaria, controla inasistencias y revisa el historial operativo según tu rol."
         actions={
-          <Button
-            type="button"
-            variant="outline"
-            onClick={async () => {
-              await Promise.all([loadSelfData(), loadSummary()])
-            }}
-          >
-            <RefreshCcw />
-            Actualizar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {canJustify ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setZktecoImportOpen(true)
+                  setZktecoImportResult(null)
+                }}
+              >
+                <FileSpreadsheet />
+                Importar ZKTECO
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                await Promise.all([loadSelfData(), loadSummary()])
+              }}
+            >
+              <RefreshCcw />
+              Actualizar
+            </Button>
+          </div>
         }
       />
 
@@ -525,28 +641,52 @@ export function AttendancePage() {
         <section className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
-              title="Tasa de asistencia"
-              value={`${summaryKpis.attendanceRate}%`}
-              description={`${summaryKpis.presentCount} de ${summaryKpis.total} registro(s) sin inasistencia`}
-              icon={Percent}
+              title="Horas trabajadas"
+              value={formatMinutes(summaryKpis.workedMinutes)}
+              description="Total importado desde marcaciones"
+              icon={Hourglass}
             />
             <MetricCard
-              title="Presentes"
-              value={summaryKpis.presentCount}
-              description="Incluye tardanzas justificadas y no justificadas"
-              icon={UserCheck}
+              title="Horas extra"
+              value={formatMinutes(summaryKpis.extraMinutes)}
+              description="Tiempo adicional registrado"
+              icon={Clock3}
             />
             <MetricCard
-              title="Tardanzas"
-              value={summaryKpis.lateCount}
-              description={`${summaryKpis.averageLateMinutes} min promedio de tardanza`}
+              title="Promedio tardanza"
+              value={`${summaryKpis.averageLateMinutes} min`}
+              description={`${summaryKpis.lateCount} tardanza(s)`}
               icon={TimerReset}
             />
             <MetricCard
-              title="Inasistencias"
-              value={summaryKpis.absentCount}
-              description="Ausencias justificadas y pendientes"
+              title="Top tardanzas"
+              value={summaryKpis.topLateEmployee.value}
+              description={summaryKpis.topLateEmployee.description}
+              icon={Trophy}
+            />
+            <MetricCard
+              title="Top faltas"
+              value={summaryKpis.topAbsentEmployee.value}
+              description={summaryKpis.topAbsentEmployee.description}
+              icon={UserX}
+            />
+            <MetricCard
+              title="Puntualidad"
+              value={`${summaryKpis.punctualityRate}%`}
+              description={`${summaryKpis.punctualCount} registro(s) puntuales`}
+              icon={Percent}
+            />
+            <MetricCard
+              title="Ausentismo"
+              value={`${summaryKpis.absenteeismRate}%`}
+              description={`${summaryKpis.absentCount} inasistencia(s)`}
               icon={TriangleAlert}
+            />
+            <MetricCard
+              title="Día crítico"
+              value={summaryKpis.topAbsentDay.value}
+              description={summaryKpis.topAbsentDay.description}
+              icon={CalendarDays}
             />
           </div>
 
@@ -667,6 +807,94 @@ export function AttendancePage() {
           </Card>
         </section>
       ) : null}
+
+      <EntityDrawer
+        open={zktecoImportOpen}
+        onOpenChange={(open) => {
+          setZktecoImportOpen(open)
+          if (!open) {
+            setZktecoFile(null)
+            setZktecoImportResult(null)
+          }
+        }}
+        title="Importar ZKTECO"
+        description="Carga registros de asistencia desde Excel y crea trabajadores faltantes con código biométrico."
+        footer={
+          <EntityDrawerActions
+            onCancel={() => setZktecoImportOpen(false)}
+            isLoading={importingZkteco}
+            submitLabel="Importar archivo"
+            form="zkteco-import-form"
+          />
+        }
+      >
+        <form id="zkteco-import-form" onSubmit={submitZktecoImport} className="space-y-5">
+          <div className="space-y-2">
+            <Label htmlFor="zkteco-file">Archivo Excel</Label>
+            <Input
+              id="zkteco-file"
+              type="file"
+              accept=".xlsx,.xls"
+              disabled={importingZkteco}
+              onChange={(event) => {
+                setZktecoFile(event.target.files?.[0] ?? null)
+                setZktecoImportResult(null)
+              }}
+              className="rounded-lg border-border/60"
+            />
+          </div>
+
+          {importingZkteco ? (
+            <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-muted/30 p-4 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Procesando archivo...
+            </div>
+          ) : null}
+
+          {zktecoImportResult ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-border/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Filas leídas</p>
+                  <p className="mt-2 text-2xl font-semibold">{zktecoImportResult.rowsRead}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Trabajadores creados</p>
+                  <p className="mt-2 text-2xl font-semibold">{zktecoImportResult.employeesCreated}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Asistencias creadas</p>
+                  <p className="mt-2 text-2xl font-semibold">{zktecoImportResult.attendanceCreated}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Actualizadas</p>
+                  <p className="mt-2 text-2xl font-semibold">{zktecoImportResult.attendanceUpdated}</p>
+                </div>
+              </div>
+
+              {zktecoImportResult.errors.length ? (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+                  <p className="text-sm font-medium text-destructive">
+                    {zktecoImportResult.rowsSkipped} fila(s) omitida(s)
+                  </p>
+                  <div className="mt-3 max-h-40 space-y-2 overflow-auto text-sm text-muted-foreground">
+                    {zktecoImportResult.errors.map((error) => (
+                      <p key={`${error.rowNumber}-${error.message}`}>
+                        Fila {error.rowNumber}: {error.message}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+                  <Upload className="size-4" />
+                  Todas las filas válidas fueron procesadas.
+                </div>
+              )}
+            </div>
+          ) : null}
+        </form>
+      </EntityDrawer>
 
       <EntityDrawer
         open={justificationTarget !== null}

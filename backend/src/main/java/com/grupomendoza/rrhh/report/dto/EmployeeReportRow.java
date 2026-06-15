@@ -8,6 +8,7 @@ public record EmployeeReportRow(
         String email,
         String role,
         String dni,
+        String biometricCode,
         String phone,
         LocalDate hireDate,
         String areaName,

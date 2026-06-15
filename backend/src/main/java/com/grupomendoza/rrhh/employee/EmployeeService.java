@@ -83,6 +83,7 @@ public class EmployeeService {
         employee.setPosition(position);
         employee.setSite(site);
         employee.setDni(request.dni().trim());
+        employee.setBiometricCode(null);
         employee.setPhone(normalizeNullable(request.phone()));
         employee.setHireDate(request.hireDate());
         employee.setStatus(EmployeeStatus.ACTIVE);
@@ -150,6 +151,7 @@ public class EmployeeService {
                 role.name(),
                 RoleLabelMapper.toLabel(role),
                 employee.getDni(),
+                employee.getBiometricCode(),
                 employee.getPhone(),
                 employee.getHireDate(),
                 employee.getPosition().getArea().getName(),
@@ -173,6 +175,7 @@ public class EmployeeService {
                 role.name(),
                 RoleLabelMapper.toLabel(role),
                 employee.getDni(),
+                employee.getBiometricCode(),
                 employee.getPhone(),
                 employee.getHireDate(),
                 position.getArea().getId(),

@@ -270,6 +270,11 @@ export function EmployeesPage() {
             <p className="text-xs text-muted-foreground">
               DNI: {row.original.dni}
             </p>
+            {row.original.biometricCode ? (
+              <p className="text-xs text-muted-foreground">
+                Código biométrico: {row.original.biometricCode}
+              </p>
+            ) : null}
           </div>
         ),
       },
@@ -350,7 +355,7 @@ export function EmployeesPage() {
       <div className="flex flex-col gap-4 sm:flex-row">
         <div className="relative flex-1">
           <Input
-            placeholder="Buscar por nombre, correo o DNI"
+            placeholder="Buscar por nombre, correo, DNI o código biométrico"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="h-9 rounded-lg border-border/60"

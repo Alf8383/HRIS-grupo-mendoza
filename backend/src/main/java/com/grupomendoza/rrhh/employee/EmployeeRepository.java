@@ -11,6 +11,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
 
     Optional<Employee> findByUserId(Long userId);
 
+    Optional<Employee> findByBiometricCode(String biometricCode);
+
     @Query("""
             select e
             from Employee e
@@ -21,7 +23,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
             where (:search is null
                    or lower(u.fullName) like concat('%', cast(:search as string), '%')
                    or lower(u.email) like concat('%', cast(:search as string), '%')
-                   or lower(e.dni) like concat('%', cast(:search as string), '%'))
+                   or lower(e.dni) like concat('%', cast(:search as string), '%')
+                   or lower(e.biometricCode) like concat('%', cast(:search as string), '%'))
               and (:status is null or e.status = :status)
               and (:siteId is null or e.site.id = :siteId)
               and (:positionId is null or e.position.id = :positionId)

@@ -10,6 +10,8 @@ public record AttendanceRecordResponse(
         Instant checkOutAt,
         String status,
         Integer lateMinutes,
+        Integer workedMinutes,
+        Integer extraMinutes,
         String source,
         String notes,
         String justificationNote,

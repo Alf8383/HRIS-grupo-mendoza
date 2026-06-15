@@ -7,6 +7,7 @@ import com.grupomendoza.rrhh.attendance.dto.CheckOutRequest;
 import com.grupomendoza.rrhh.attendance.dto.CloseDayRequest;
 import com.grupomendoza.rrhh.attendance.dto.JustifyAttendanceRequest;
 import com.grupomendoza.rrhh.attendance.dto.TodayAttendanceResponse;
+import com.grupomendoza.rrhh.attendance.dto.ZktecoImportResultResponse;
 import com.grupomendoza.rrhh.audit.AuditService;
 import com.grupomendoza.rrhh.common.api.ApiResponse;
 import com.grupomendoza.rrhh.security.AuthenticatedUser;
@@ -24,15 +25,22 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/v1/attendance")
 public class AttendanceController {
     private final AttendanceService attendanceService;
+    private final ZktecoAttendanceImportService zktecoAttendanceImportService;
     private final AuditService auditService;
 
-    public AttendanceController(AttendanceService attendanceService, AuditService auditService) {
+    public AttendanceController(
+            AttendanceService attendanceService,
+            ZktecoAttendanceImportService zktecoAttendanceImportService,
+            AuditService auditService
+    ) {
         this.attendanceService = attendanceService;
+        this.zktecoAttendanceImportService = zktecoAttendanceImportService;
         this.auditService = auditService;
     }
 
@@ -116,6 +124,26 @@ public class AttendanceController {
     ) {
         AttendanceSummaryItemResponse response = attendanceService.justify(currentUser, id, request.justificationNote());
         auditService.record(currentUser, "ATTENDANCE", "JUSTIFY", "ATTENDANCE_RECORD", response.id(), "Registro justificado para " + response.employeeName() + " en " + response.attendanceDate());
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/imports/zkteco")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR')")
+    public ResponseEntity<ApiResponse<ZktecoImportResultResponse>> importZkteco(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @RequestParam("file") MultipartFile file
+    ) {
+        ZktecoImportResultResponse response = zktecoAttendanceImportService.importFile(file);
+        auditService.record(
+                currentUser,
+                "ATTENDANCE",
+                "IMPORT_ZKTECO",
+                "ATTENDANCE_RECORD",
+                null,
+                "Importación ZKTECO completada con " + response.attendanceCreated() + " registro(s) creado(s), "
+                        + response.attendanceUpdated() + " actualizado(s) y "
+                        + response.employeesCreated() + " empleado(s) creado(s)."
+        );
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

@@ -43,6 +43,9 @@ public class Employee {
     @Column(nullable = false, unique = true, length = 20)
     private String dni;
 
+    @Column(name = "biometric_code", unique = true, length = 30)
+    private String biometricCode;
+
     @Column(length = 30)
     private String phone;
 
@@ -105,6 +108,14 @@ public class Employee {
 
     public void setDni(String dni) {
         this.dni = dni;
+    }
+
+    public String getBiometricCode() {
+        return biometricCode;
+    }
+
+    public void setBiometricCode(String biometricCode) {
+        this.biometricCode = biometricCode;
     }
 
     public String getPhone() {

@@ -45,6 +45,12 @@ public class AttendanceRecord {
     @Column(name = "late_minutes", nullable = false)
     private Integer lateMinutes;
 
+    @Column(name = "worked_minutes")
+    private Integer workedMinutes;
+
+    @Column(name = "extra_minutes")
+    private Integer extraMinutes;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     private AttendanceSource source;
@@ -130,6 +136,22 @@ public class AttendanceRecord {
 
     public void setLateMinutes(Integer lateMinutes) {
         this.lateMinutes = lateMinutes;
+    }
+
+    public Integer getWorkedMinutes() {
+        return workedMinutes;
+    }
+
+    public void setWorkedMinutes(Integer workedMinutes) {
+        this.workedMinutes = workedMinutes;
+    }
+
+    public Integer getExtraMinutes() {
+        return extraMinutes;
+    }
+
+    public void setExtraMinutes(Integer extraMinutes) {
+        this.extraMinutes = extraMinutes;
     }
 
     public AttendanceSource getSource() {

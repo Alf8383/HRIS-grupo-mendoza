@@ -25,7 +25,12 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -88,6 +93,7 @@ public class ReportService {
                         row.email(),
                         row.role(),
                         row.dni(),
+                        stringOf(row.biometricCode()),
                         stringOf(row.phone()),
                         stringOf(row.hireDate()),
                         row.areaName(),
@@ -99,7 +105,7 @@ public class ReportService {
         return excelExportService.export(
                 "Empleados",
                 employeeKpis(rows),
-                List.of("ID", "Nombre", "Correo", "Rol", "DNI", "Teléfono", "Ingreso", "Área", "Cargo", "Sede", "Estado"),
+                List.of("ID", "Nombre", "Correo", "Rol", "DNI", "Código biométrico", "Teléfono", "Ingreso", "Área", "Cargo", "Sede", "Estado"),
                 values
         );
     }
@@ -124,10 +130,16 @@ public class ReportService {
             scopedAreaId = managerEmployee.getPosition().getArea().getId();
             excludedEmployeeId = managerEmployee.getId();
         }
+        Long filteredAreaId = scopedAreaId;
+        Long filteredExcludedEmployeeId = excludedEmployeeId;
 
-        return attendanceRecordRepository
-                .searchSummary(startDate, endDate, parsedStatus, employeeId, scopedAreaId, excludedEmployeeId)
-                .stream()
+        return attendanceRecordRepository.findAllSummary().stream()
+                .filter(record -> startDate == null || !record.getAttendanceDate().isBefore(startDate))
+                .filter(record -> endDate == null || !record.getAttendanceDate().isAfter(endDate))
+                .filter(record -> parsedStatus == null || record.getStatus() == parsedStatus)
+                .filter(record -> employeeId == null || record.getEmployee().getId().equals(employeeId))
+                .filter(record -> filteredAreaId == null || record.getEmployee().getPosition().getArea().getId().equals(filteredAreaId))
+                .filter(record -> filteredExcludedEmployeeId == null || !record.getEmployee().getId().equals(filteredExcludedEmployeeId))
                 .filter(record -> siteId == null || record.getEmployee().getSite().getId().equals(siteId))
                 .map(this::toAttendanceReportRow)
                 .toList();
@@ -158,6 +170,8 @@ public class ReportService {
                         stringOf(row.checkOutAt()),
                         row.status(),
                         stringOf(row.lateMinutes()),
+                        stringOf(row.workedMinutes()),
+                        stringOf(row.extraMinutes()),
                         row.source(),
                         stringOf(row.notes()),
                         stringOf(row.justificationNote())
@@ -166,7 +180,7 @@ public class ReportService {
         return excelExportService.export(
                 "Asistencia",
                 attendanceKpis(rows),
-                List.of("ID", "Empleado ID", "Empleado", "Correo", "Área", "Cargo", "Sede", "Fecha", "Entrada", "Salida", "Estado", "Tardanza", "Origen", "Notas", "Justificación"),
+                List.of("ID", "Empleado ID", "Empleado", "Correo", "Área", "Cargo", "Sede", "Fecha", "Entrada", "Salida", "Estado", "Tardanza", "Minutos trabajados", "Minutos extra", "Origen", "Notas", "Justificación"),
                 values
         );
     }
@@ -341,13 +355,24 @@ public class ReportService {
         long averageLateMinutes = lateRows.isEmpty()
                 ? 0
                 : Math.round(lateRows.stream().mapToInt(AttendanceReportRow::lateMinutes).average().orElse(0));
-        long attendanceRate = rows.isEmpty() ? 0 : Math.round((presentCount * 100.0) / rows.size());
+        long punctualCount = rows.stream().filter(row -> "PRESENT".equals(row.status())).count();
+        long punctualityRate = rows.isEmpty() ? 0 : Math.round((punctualCount * 100.0) / rows.size());
+        long absenteeismRate = rows.isEmpty() ? 0 : Math.round((absentCount * 100.0) / rows.size());
+        int workedMinutes = rows.stream().mapToInt(row -> row.workedMinutes() != null ? row.workedMinutes() : 0).sum();
+        int extraMinutes = rows.stream().mapToInt(row -> row.extraMinutes() != null ? row.extraMinutes() : 0).sum();
+        String topLateEmployee = topEmployeeByStatus(rows, List.of("LATE", "JUSTIFIED_LATE"));
+        String topAbsentEmployee = topEmployeeByStatus(rows, List.of("ABSENT", "JUSTIFIED_ABSENT"));
+        String topAbsentDay = topAbsentDay(rows);
 
         return List.of(
-                kpi("Tasa de asistencia", attendanceRate + "%", presentCount + " de " + rows.size() + " registro(s)"),
-                kpi("Presentes", presentCount, "Incluye tardanzas justificadas y no justificadas"),
-                kpi("Tardanzas", lateCount, averageLateMinutes + " min promedio"),
-                kpi("Inasistencias", absentCount, "Ausencias justificadas y pendientes")
+                kpi("Horas trabajadas", formatMinutes(workedMinutes), "Total importado desde marcaciones"),
+                kpi("Horas extra", formatMinutes(extraMinutes), "Tiempo adicional registrado"),
+                kpi("Promedio tardanza", averageLateMinutes + " min", lateCount + " tardanza(s)"),
+                kpi("Top tardanzas", topLateEmployee, "Empleado con más tardanzas"),
+                kpi("Top faltas", topAbsentEmployee, "Empleado con más inasistencias"),
+                kpi("Puntualidad", punctualityRate + "%", punctualCount + " registro(s) puntuales"),
+                kpi("Ausentismo", absenteeismRate + "%", absentCount + " inasistencia(s)"),
+                kpi("Día crítico", topAbsentDay, "Mayor concentración de ausencias")
         );
     }
 
@@ -387,6 +412,41 @@ public class ReportService {
         return "ABSENT".equals(status) || "JUSTIFIED_ABSENT".equals(status);
     }
 
+    private String topEmployeeByStatus(List<AttendanceReportRow> rows, List<String> statuses) {
+        return rows.stream()
+                .filter(row -> statuses.contains(row.status()))
+                .collect(Collectors.groupingBy(AttendanceReportRow::employeeName, LinkedHashMap::new, Collectors.counting()))
+                .entrySet()
+                .stream()
+                .max(Map.Entry.<String, Long>comparingByValue().thenComparing(Map.Entry.comparingByKey(Comparator.reverseOrder())))
+                .map(entry -> entry.getKey() + " (" + entry.getValue() + ")")
+                .orElse("Sin datos");
+    }
+
+    private String topAbsentDay(List<AttendanceReportRow> rows) {
+        return rows.stream()
+                .filter(row -> isAbsentStatus(row.status()))
+                .map(AttendanceReportRow::attendanceDate)
+                .collect(Collectors.groupingBy(Function.identity(), LinkedHashMap::new, Collectors.counting()))
+                .entrySet()
+                .stream()
+                .max(Map.Entry.<LocalDate, Long>comparingByValue().thenComparing(Map.Entry.comparingByKey(Comparator.reverseOrder())))
+                .map(entry -> entry.getKey() + " (" + entry.getValue() + ")")
+                .orElse("Sin datos");
+    }
+
+    private String formatMinutes(int totalMinutes) {
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        if (hours == 0) {
+            return minutes + " min";
+        }
+        if (minutes == 0) {
+            return hours + " h";
+        }
+        return hours + " h " + minutes + " min";
+    }
+
     private List<String> kpi(String name, Object value, String description) {
         return List.of(name, stringOf(value), description);
     }
@@ -402,6 +462,7 @@ public class ReportService {
                 employee.getUser().getEmail(),
                 roleCode,
                 employee.getDni(),
+                employee.getBiometricCode(),
                 employee.getPhone(),
                 employee.getHireDate(),
                 employee.getPosition().getArea().getName(),
@@ -425,6 +486,8 @@ public class ReportService {
                 record.getCheckOutAt(),
                 record.getStatus().name(),
                 record.getLateMinutes(),
+                record.getWorkedMinutes(),
+                record.getExtraMinutes(),
                 record.getSource().name(),
                 record.getNotes(),
                 record.getJustificationNote()

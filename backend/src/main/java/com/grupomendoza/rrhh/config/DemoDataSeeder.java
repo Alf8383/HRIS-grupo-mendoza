@@ -249,6 +249,8 @@ public class DemoDataSeeder implements ApplicationRunner {
         record.setCheckOutAt(checkOutAt);
         record.setStatus(status);
         record.setLateMinutes(lateMinutes);
+        record.setWorkedMinutes(null);
+        record.setExtraMinutes(null);
         record.setSource(AttendanceSource.MANUAL);
         record.setNotes(notes);
         record.setJustificationNote(justificationNote);

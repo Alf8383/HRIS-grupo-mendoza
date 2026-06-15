@@ -69,6 +69,8 @@ public class AttendanceService {
         record.setCheckInAt(now);
         record.setSource(AttendanceSource.MANUAL);
         record.setLateMinutes(lateMinutes);
+        record.setWorkedMinutes(null);
+        record.setExtraMinutes(null);
         record.setStatus(lateMinutes > settings.getLateToleranceMinutes()
                 ? AttendanceStatus.LATE
                 : AttendanceStatus.PRESENT);
@@ -114,7 +116,7 @@ public class AttendanceService {
                 .orElse(null);
 
         if (record == null) {
-            return new TodayAttendanceResponse(LocalDate.now(), false, null, null, null, null, null, null, null, null, null, null);
+            return new TodayAttendanceResponse(LocalDate.now(), false, null, null, null, null, null, null, null, null, null, null, null, null);
         }
 
         return new TodayAttendanceResponse(
@@ -125,6 +127,8 @@ public class AttendanceService {
                 record.getCheckOutAt(),
                 record.getStatus().name(),
                 record.getLateMinutes(),
+                record.getWorkedMinutes(),
+                record.getExtraMinutes(),
                 record.getSource().name(),
                 record.getNotes(),
                 record.getJustificationNote(),
@@ -165,10 +169,16 @@ public class AttendanceService {
             areaId = managerEmployee.getPosition().getArea().getId();
             excludedEmployeeId = managerEmployee.getId();
         }
+        Long filteredAreaId = areaId;
+        Long filteredExcludedEmployeeId = excludedEmployeeId;
 
-        return attendanceRecordRepository
-                .searchSummary(startDate, endDate, parsedStatus, employeeId, areaId, excludedEmployeeId)
-                .stream()
+        return attendanceRecordRepository.findAllSummary().stream()
+                .filter(record -> startDate == null || !record.getAttendanceDate().isBefore(startDate))
+                .filter(record -> endDate == null || !record.getAttendanceDate().isAfter(endDate))
+                .filter(record -> parsedStatus == null || record.getStatus() == parsedStatus)
+                .filter(record -> employeeId == null || record.getEmployee().getId().equals(employeeId))
+                .filter(record -> filteredAreaId == null || record.getEmployee().getPosition().getArea().getId().equals(filteredAreaId))
+                .filter(record -> filteredExcludedEmployeeId == null || !record.getEmployee().getId().equals(filteredExcludedEmployeeId))
                 .map(this::toSummaryResponse)
                 .toList();
     }
@@ -247,6 +257,8 @@ public class AttendanceService {
         record.setEmployee(employee);
         record.setAttendanceDate(attendanceDate);
         record.setLateMinutes(0);
+        record.setWorkedMinutes(null);
+        record.setExtraMinutes(null);
         record.setSource(AttendanceSource.MANUAL);
         record.setStatus(AttendanceStatus.PRESENT);
         return record;
@@ -284,6 +296,8 @@ public class AttendanceService {
                 record.getCheckOutAt(),
                 record.getStatus().name(),
                 record.getLateMinutes(),
+                record.getWorkedMinutes(),
+                record.getExtraMinutes(),
                 record.getSource().name(),
                 record.getNotes(),
                 record.getJustificationNote(),
@@ -306,6 +320,8 @@ public class AttendanceService {
                 record.getCheckOutAt(),
                 record.getStatus().name(),
                 record.getLateMinutes(),
+                record.getWorkedMinutes(),
+                record.getExtraMinutes(),
                 record.getSource().name(),
                 record.getNotes(),
                 record.getJustificationNote(),

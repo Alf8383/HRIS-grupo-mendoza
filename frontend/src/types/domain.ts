@@ -55,6 +55,7 @@ export type EmployeeRecord = {
   role: string
   roleLabel: string
   dni: string
+  biometricCode: string | null
   phone: string | null
   hireDate: string
   areaName: string
@@ -71,6 +72,7 @@ export type EmployeeDetail = {
   role: string
   roleLabel: string
   dni: string
+  biometricCode: string | null
   phone: string | null
   hireDate: string
   areaId: number
@@ -94,6 +96,8 @@ export type TodayAttendance = {
   checkOutAt: string | null
   status: string | null
   lateMinutes: number | null
+  workedMinutes: number | null
+  extraMinutes: number | null
   source: string | null
   notes: string | null
   justificationNote: string | null
@@ -108,6 +112,8 @@ export type AttendanceRecord = {
   checkOutAt: string | null
   status: string
   lateMinutes: number
+  workedMinutes: number | null
+  extraMinutes: number | null
   source: string
   notes: string | null
   justificationNote: string | null
@@ -128,11 +134,27 @@ export type AttendanceSummaryItem = {
   checkOutAt: string | null
   status: string
   lateMinutes: number
+  workedMinutes: number | null
+  extraMinutes: number | null
   source: string
   notes: string | null
   justificationNote: string | null
   justifiedByName: string | null
   justifiedAt: string | null
+}
+
+export type ZktecoImportError = {
+  rowNumber: number
+  message: string
+}
+
+export type ZktecoImportResult = {
+  rowsRead: number
+  attendanceCreated: number
+  attendanceUpdated: number
+  employeesCreated: number
+  rowsSkipped: number
+  errors: ZktecoImportError[]
 }
 
 export type LeaveRequestRecord = {
@@ -225,6 +247,7 @@ export type EmployeeReportRow = {
   email: string
   role: string
   dni: string
+  biometricCode: string | null
   phone: string | null
   hireDate: string
   areaName: string
@@ -246,6 +269,8 @@ export type AttendanceReportRow = {
   checkOutAt: string | null
   status: string
   lateMinutes: number | null
+  workedMinutes: number | null
+  extraMinutes: number | null
   source: string
   notes: string | null
   justificationNote: string | null

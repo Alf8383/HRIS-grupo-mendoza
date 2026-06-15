@@ -115,6 +115,7 @@ export function EmployeeDetailPage() {
             </CardHeader>
             <CardContent className="grid gap-6 md:grid-cols-2">
               <DetailItem label="DNI" value={employee.dni} />
+              <DetailItem label="Código biométrico" value={employee.biometricCode || 'Sin registro'} />
               <DetailItem label="Teléfono" value={employee.phone || 'Sin registro'} />
               <DetailItem label="Fecha de ingreso" value={formatDate(employee.hireDate)} />
               <DetailItem label="Rol" value={employee.roleLabel} />

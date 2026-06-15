@@ -1,8 +1,24 @@
-import { useCallback, useEffect, useState } from 'react'
-import { CalendarCheck2, CheckCircle2, Clock3, ClipboardList, Loader2, RefreshCcw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  CalendarCheck2,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Percent,
+  TimerReset,
+  TriangleAlert,
+  UserCheck,
+  Loader2,
+  RefreshCcw,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
+import type { ColumnDef } from '@tanstack/react-table'
+import { ConfirmDialog } from '@/components/app/confirm-dialog'
+import { DataTable } from '@/components/app/data-table'
+import { EntityDrawer, EntityDrawerActions } from '@/components/app/entity-drawer'
 import { EmptyState } from '@/components/app/empty-state'
+import { MetricCard } from '@/components/app/metric-card'
 import { PageHeader } from '@/components/app/page-header'
 import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
@@ -16,7 +32,6 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -24,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/auth-context'
 import { formatDate, formatTime } from '@/lib/format'
 import { apiRequest, getApiMessage } from '@/lib/http'
@@ -75,6 +91,7 @@ export function AttendancePage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('ALL')
   const [attendanceNote, setAttendanceNote] = useState('')
   const [closeDayDate, setCloseDayDate] = useState(new Date().toISOString().slice(0, 10))
+  const [closeDayConfirmOpen, setCloseDayConfirmOpen] = useState(false)
   const [justificationTarget, setJustificationTarget] = useState<AttendanceSummaryItem | null>(null)
   const [justificationNote, setJustificationNote] = useState('')
   const [loadingSelf, setLoadingSelf] = useState(showSelfService)
@@ -208,6 +225,7 @@ export function AttendancePage() {
       toast.error(getApiMessage(error, 'No se pudo ejecutar el cierre diario.'))
     } finally {
       setClosingDay(false)
+      setCloseDayConfirmOpen(false)
     }
   }
 
@@ -236,6 +254,136 @@ export function AttendancePage() {
   const allowCheckIn = !today.recorded || !today.checkInAt
   const allowCheckOut = Boolean(today.recorded && today.checkInAt && !today.checkOutAt)
 
+  const summaryKpis = useMemo(() => {
+    const total = summary.length
+    const absentStatuses = ['ABSENT', 'JUSTIFIED_ABSENT']
+    const lateStatuses = ['LATE', 'JUSTIFIED_LATE']
+    const presentCount = summary.filter((item) => !absentStatuses.includes(item.status)).length
+    const lateCount = summary.filter((item) => lateStatuses.includes(item.status)).length
+    const absentCount = summary.filter((item) => absentStatuses.includes(item.status)).length
+    const lateRecords = summary.filter((item) => item.lateMinutes > 0)
+    const averageLateMinutes = lateRecords.length
+      ? Math.round(
+          lateRecords.reduce((totalMinutes, item) => totalMinutes + item.lateMinutes, 0)
+          / lateRecords.length,
+        )
+      : 0
+    const attendanceRate = total ? Math.round((presentCount / total) * 100) : 0
+
+    return {
+      total,
+      presentCount,
+      lateCount,
+      absentCount,
+      averageLateMinutes,
+      attendanceRate,
+    }
+  }, [summary])
+
+  const historyColumns = useMemo<ColumnDef<AttendanceRecord>[]>(
+    () => [
+      {
+        accessorKey: 'attendanceDate',
+        header: 'Fecha',
+        cell: ({ row }) => formatDate(row.original.attendanceDate),
+      },
+      {
+        accessorKey: 'checkInAt',
+        header: 'Entrada',
+        cell: ({ row }) => formatTime(row.original.checkInAt),
+      },
+      {
+        accessorKey: 'checkOutAt',
+        header: 'Salida',
+        cell: ({ row }) => formatTime(row.original.checkOutAt),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Estado',
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            <StatusBadge value={row.original.status} />
+            {row.original.lateMinutes ? (
+              <p className="text-xs text-muted-foreground">{row.original.lateMinutes} min de tardanza</p>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [],
+  )
+
+  const summaryColumns = useMemo<ColumnDef<AttendanceSummaryItem>[]>(
+    () => [
+      {
+        accessorKey: 'employeeName',
+        header: 'Empleado',
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium text-foreground">{row.original.employeeName}</p>
+            <p className="text-sm text-muted-foreground">{row.original.positionName}</p>
+            <p className="text-xs text-muted-foreground">
+              {row.original.areaName} · {row.original.siteName}
+            </p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'attendanceDate',
+        header: 'Fecha',
+        cell: ({ row }) => formatDate(row.original.attendanceDate),
+      },
+      {
+        accessorKey: 'checkInAt',
+        header: 'Marcación',
+        cell: ({ row }) => (
+          <div className="text-sm">
+            <p>Entrada: {formatTime(row.original.checkInAt)}</p>
+            <p className="text-muted-foreground">Salida: {formatTime(row.original.checkOutAt)}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Estado',
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            <StatusBadge value={row.original.status} />
+            {row.original.lateMinutes ? (
+              <p className="text-xs text-muted-foreground">{row.original.lateMinutes} min de tardanza</p>
+            ) : null}
+            {row.original.justificationNote ? (
+              <p className="text-xs text-muted-foreground">{row.original.justificationNote}</p>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Acciones',
+        cell: ({ row }) => {
+          const item = row.original
+          if (canJustify && ['LATE', 'ABSENT'].includes(item.status)) {
+            return (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setJustificationTarget(item)
+                  setJustificationNote(item.justificationNote ?? '')
+                }}
+              >
+                Justificar
+              </Button>
+            )
+          }
+          return <span className="text-xs text-muted-foreground">Sin acciones</span>
+        },
+      },
+    ],
+    [canJustify],
+  )
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -257,7 +405,7 @@ export function AttendancePage() {
 
       {showSelfService ? (
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
-          <Card className="rounded-3xl">
+          <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle>Mi historial</CardTitle>
               <CardDescription>Revisa tus registros por rango de fechas.</CardDescription>
@@ -271,6 +419,7 @@ export function AttendancePage() {
                     type="date"
                     value={historyStartDate}
                     onChange={(event) => setHistoryStartDate(event.target.value)}
+                    className="rounded-lg border-border/60"
                   />
                 </div>
                 <div className="space-y-2">
@@ -280,61 +429,38 @@ export function AttendancePage() {
                     type="date"
                     value={historyEndDate}
                     onChange={(event) => setHistoryEndDate(event.target.value)}
+                    className="rounded-lg border-border/60"
                   />
                 </div>
               </div>
 
               {loadingSelf ? (
                 <TableSkeleton rows={5} columns={4} />
-              ) : history.length ? (
-                <div className="overflow-hidden rounded-2xl border">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50 text-left">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Fecha</th>
-                        <th className="px-4 py-3 font-medium">Entrada</th>
-                        <th className="px-4 py-3 font-medium">Salida</th>
-                        <th className="px-4 py-3 font-medium">Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.map((record) => (
-                        <tr key={record.id} className="border-t hover:bg-muted/30">
-                          <td className="px-4 py-3">{formatDate(record.attendanceDate)}</td>
-                          <td className="px-4 py-3">{formatTime(record.checkInAt)}</td>
-                          <td className="px-4 py-3">{formatTime(record.checkOutAt)}</td>
-                          <td className="px-4 py-3">
-                            <div className="space-y-2">
-                              <StatusBadge value={record.status} />
-                              {record.lateMinutes ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {record.lateMinutes} min de tardanza
-                                </p>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               ) : (
-                <EmptyState
-                  title="No hay registros en el periodo"
-                  description="Cuando registres asistencia, tu historial aparecerá aquí."
-                  icon={ClipboardList}
+                <DataTable
+                  columns={historyColumns}
+                  data={history}
+                  searchPlaceholder="Buscar en historial..."
+                  pageSize={10}
+                  emptyState={
+                    <EmptyState
+                      icon={ClipboardList}
+                      title="No hay registros en el periodo"
+                      description="Cuando registres asistencia, tu historial aparecerá aquí."
+                    />
+                  }
                 />
               )}
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl">
+          <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle>Mi jornada de hoy</CardTitle>
               <CardDescription>Registra tu entrada y salida del día.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border bg-muted/30 p-4">
+              <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Fecha</p>
@@ -343,17 +469,17 @@ export function AttendancePage() {
                   {today.status ? <StatusBadge value={today.status} /> : <StatusBadge value="PENDING" />}
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border bg-background p-4">
+                  <div className="rounded-xl border border-border/60 bg-background p-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Entrada</p>
                     <p className="mt-2 text-lg font-semibold">{formatTime(today.checkInAt)}</p>
                   </div>
-                  <div className="rounded-2xl border bg-background p-4">
+                  <div className="rounded-xl border border-border/60 bg-background p-4">
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Salida</p>
                     <p className="mt-2 text-lg font-semibold">{formatTime(today.checkOutAt)}</p>
                   </div>
                 </div>
                 {today.justificationNote ? (
-                  <div className="mt-4 rounded-2xl border border-dashed bg-background p-4">
+                  <div className="mt-4 rounded-xl border border-dashed border-border/60 bg-background p-4">
                     <p className="text-sm font-medium">Justificación registrada</p>
                     <p className="mt-1 text-sm text-muted-foreground">{today.justificationNote}</p>
                   </div>
@@ -367,6 +493,7 @@ export function AttendancePage() {
                   value={attendanceNote}
                   onChange={(event) => setAttendanceNote(event.target.value)}
                   placeholder="Comentario breve de la marcación"
+                  className="rounded-lg border-border/60"
                 />
               </div>
 
@@ -396,7 +523,34 @@ export function AttendancePage() {
 
       {showSummary ? (
         <section className="space-y-6">
-          <Card className="rounded-3xl">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard
+              title="Tasa de asistencia"
+              value={`${summaryKpis.attendanceRate}%`}
+              description={`${summaryKpis.presentCount} de ${summaryKpis.total} registro(s) sin inasistencia`}
+              icon={Percent}
+            />
+            <MetricCard
+              title="Presentes"
+              value={summaryKpis.presentCount}
+              description="Incluye tardanzas justificadas y no justificadas"
+              icon={UserCheck}
+            />
+            <MetricCard
+              title="Tardanzas"
+              value={summaryKpis.lateCount}
+              description={`${summaryKpis.averageLateMinutes} min promedio de tardanza`}
+              icon={TimerReset}
+            />
+            <MetricCard
+              title="Inasistencias"
+              value={summaryKpis.absentCount}
+              description="Ausencias justificadas y pendientes"
+              icon={TriangleAlert}
+            />
+          </div>
+
+          <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle>{isGlobalView ? 'Resumen global' : 'Resumen del equipo'}</CardTitle>
               <CardDescription>
@@ -414,6 +568,7 @@ export function AttendancePage() {
                     type="date"
                     value={summaryStartDate}
                     onChange={(event) => setSummaryStartDate(event.target.value)}
+                    className="rounded-lg border-border/60"
                   />
                 </div>
                 <div className="space-y-2">
@@ -423,12 +578,13 @@ export function AttendancePage() {
                     type="date"
                     value={summaryEndDate}
                     onChange={(event) => setSummaryEndDate(event.target.value)}
+                    className="rounded-lg border-border/60"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="attendance-summary-status">Estado</Label>
                   <Select value={summaryStatus} onValueChange={setSummaryStatus}>
-                    <SelectTrigger id="attendance-summary-status">
+                    <SelectTrigger id="attendance-summary-status" className="rounded-lg border-border/60">
                       <SelectValue placeholder="Estado" />
                     </SelectTrigger>
                     <SelectContent>
@@ -445,7 +601,7 @@ export function AttendancePage() {
                   <div className="space-y-2">
                     <Label htmlFor="attendance-summary-employee">Empleado</Label>
                     <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                      <SelectTrigger id="attendance-summary-employee">
+                      <SelectTrigger id="attendance-summary-employee" className="rounded-lg border-border/60">
                         <SelectValue placeholder="Empleado" />
                       </SelectTrigger>
                       <SelectContent>
@@ -462,7 +618,7 @@ export function AttendancePage() {
               </div>
 
               {canCloseDay ? (
-                <div className="rounded-2xl border bg-muted/30 p-4">
+                <div className="rounded-2xl border border-border/60 bg-muted/30 p-4">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div className="space-y-1">
                       <p className="text-sm font-medium">Cierre diario</p>
@@ -478,9 +634,10 @@ export function AttendancePage() {
                           type="date"
                           value={closeDayDate}
                           onChange={(event) => setCloseDayDate(event.target.value)}
+                          className="rounded-lg border-border/60"
                         />
                       </div>
-                      <Button type="button" disabled={closingDay} onClick={handleCloseDay}>
+                      <Button type="button" disabled={closingDay} onClick={() => setCloseDayConfirmOpen(true)}>
                         {closingDay ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
                         Ejecutar cierre
                       </Button>
@@ -491,117 +648,81 @@ export function AttendancePage() {
 
               {loadingSummary ? (
                 <TableSkeleton rows={5} columns={5} />
-              ) : summary.length ? (
-                <div className="overflow-hidden rounded-2xl border">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50 text-left">
-                      <tr>
-                        <th className="px-4 py-3 font-medium">Empleado</th>
-                        <th className="px-4 py-3 font-medium">Fecha</th>
-                        <th className="px-4 py-3 font-medium">Marcación</th>
-                        <th className="px-4 py-3 font-medium">Estado</th>
-                        <th className="px-4 py-3 font-medium">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {summary.map((item) => (
-                        <tr key={item.id} className="border-t hover:bg-muted/30">
-                          <td className="px-4 py-3 align-top">
-                            <p className="font-medium">{item.employeeName}</p>
-                            <p className="text-muted-foreground">{item.positionName}</p>
-                            <p className="text-xs text-muted-foreground">{item.areaName} · {item.siteName}</p>
-                          </td>
-                          <td className="px-4 py-3 align-top">{formatDate(item.attendanceDate)}</td>
-                          <td className="px-4 py-3 align-top">
-                            <p>Entrada: {formatTime(item.checkInAt)}</p>
-                            <p className="text-muted-foreground">Salida: {formatTime(item.checkOutAt)}</p>
-                          </td>
-                          <td className="px-4 py-3 align-top">
-                            <div className="space-y-2">
-                              <StatusBadge value={item.status} />
-                              {item.lateMinutes ? (
-                                <p className="text-xs text-muted-foreground">
-                                  {item.lateMinutes} min de tardanza
-                                </p>
-                              ) : null}
-                              {item.justificationNote ? (
-                                <p className="text-xs text-muted-foreground">{item.justificationNote}</p>
-                              ) : null}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 align-top">
-                            {canJustify && ['LATE', 'ABSENT'].includes(item.status) ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setJustificationTarget(item)
-                                  setJustificationNote(item.justificationNote ?? '')
-                                }}
-                              >
-                                Justificar
-                              </Button>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">Sin acciones</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
               ) : (
-                <EmptyState
-                  title="No hay registros para mostrar"
-                  description="Ajusta los filtros o espera nuevas marcaciones para ver resultados aquí."
-                  icon={ClipboardList}
+                <DataTable
+                  columns={summaryColumns}
+                  data={summary}
+                  searchPlaceholder="Buscar en resumen..."
+                  pageSize={10}
+                  emptyState={
+                    <EmptyState
+                      icon={ClipboardList}
+                      title="No hay registros para mostrar"
+                      description="Ajusta los filtros o espera nuevas marcaciones para ver resultados aquí."
+                    />
+                  }
                 />
               )}
             </CardContent>
           </Card>
-
-          {justificationTarget ? (
-            <Card className="rounded-3xl">
-              <CardHeader>
-                <CardTitle>Justificar registro</CardTitle>
-                <CardDescription>
-                  {justificationTarget.employeeName} · {formatDate(justificationTarget.attendanceDate)}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form className="space-y-4" onSubmit={submitJustification}>
-                  <div className="space-y-2">
-                    <Label htmlFor="attendance-justification-note">Motivo</Label>
-                    <Textarea
-                      id="attendance-justification-note"
-                      value={justificationNote}
-                      onChange={(event) => setJustificationNote(event.target.value)}
-                      placeholder="Describe el motivo de la justificación"
-                      required
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Button disabled={submitting} type="submit">
-                      {submitting ? <Loader2 className="animate-spin" /> : null}
-                      Guardar justificación
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setJustificationTarget(null)
-                        setJustificationNote('')
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-          ) : null}
         </section>
       ) : null}
+
+      <EntityDrawer
+        open={justificationTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setJustificationTarget(null)
+            setJustificationNote('')
+          }
+        }}
+        title="Justificar registro"
+        description={
+          justificationTarget
+            ? `${justificationTarget.employeeName} · ${formatDate(justificationTarget.attendanceDate)}`
+            : ''
+        }
+        footer={
+          <EntityDrawerActions
+            onCancel={() => {
+              setJustificationTarget(null)
+              setJustificationNote('')
+            }}
+            isLoading={submitting}
+            submitLabel="Guardar justificación"
+            form="attendance-justification-form"
+          />
+        }
+      >
+        <form id="attendance-justification-form" onSubmit={submitJustification} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="attendance-justification-note">Motivo</Label>
+            <Textarea
+              id="attendance-justification-note"
+              value={justificationNote}
+              onChange={(event) => setJustificationNote(event.target.value)}
+              placeholder="Describe el motivo de la justificación"
+              required
+              className="rounded-lg border-border/60"
+            />
+          </div>
+          {submitting && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> Guardando...
+            </div>
+          )}
+        </form>
+      </EntityDrawer>
+
+      <ConfirmDialog
+        open={closeDayConfirmOpen}
+        onOpenChange={setCloseDayConfirmOpen}
+        title="Ejecutar cierre diario"
+        description={`Se generarán inasistencias para empleados activos sin marcación el ${formatDate(closeDayDate)}. ¿Deseas continuar?`}
+        confirmLabel="Ejecutar cierre"
+        isLoading={closingDay}
+        onConfirm={handleCloseDay}
+      />
     </div>
   )
 }

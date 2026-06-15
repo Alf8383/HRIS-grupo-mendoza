@@ -1,6 +1,7 @@
 package com.grupomendoza.rrhh.contract;
 
 import com.grupomendoza.rrhh.contract.dto.ContractResponse;
+import com.grupomendoza.rrhh.contract.dto.ContractDocumentResponse;
 import com.grupomendoza.rrhh.contract.dto.CreateContractRequest;
 import com.grupomendoza.rrhh.contract.dto.ExpiringContractResponse;
 import com.grupomendoza.rrhh.contract.dto.RenewContractRequest;
@@ -8,21 +9,30 @@ import com.grupomendoza.rrhh.contract.dto.UpdateContractRequest;
 import com.grupomendoza.rrhh.employee.Employee;
 import com.grupomendoza.rrhh.employee.EmployeeRepository;
 import jakarta.persistence.EntityNotFoundException;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ContractService {
     private static final int EXPIRING_THRESHOLD_DAYS = 30;
+    private static final long MAX_DOCUMENT_SIZE_BYTES = 10 * 1024 * 1024;
 
     private final ContractRepository contractRepository;
+    private final ContractDocumentRepository contractDocumentRepository;
     private final EmployeeRepository employeeRepository;
 
-    public ContractService(ContractRepository contractRepository, EmployeeRepository employeeRepository) {
+    public ContractService(
+            ContractRepository contractRepository,
+            ContractDocumentRepository contractDocumentRepository,
+            EmployeeRepository employeeRepository
+    ) {
         this.contractRepository = contractRepository;
+        this.contractDocumentRepository = contractDocumentRepository;
         this.employeeRepository = employeeRepository;
     }
 
@@ -99,6 +109,44 @@ public class ContractService {
         return toResponse(contractRepository.save(contract));
     }
 
+    @Transactional
+    public ContractDocumentResponse uploadDocument(Long contractId, MultipartFile file) {
+        Contract contract = findContract(contractId);
+        validateDocument(file);
+
+        try {
+            ContractDocument document = new ContractDocument();
+            document.setContract(contract);
+            document.setFileName(normalizeFileName(file.getOriginalFilename()));
+            document.setContentType(normalizeContentType(file.getContentType()));
+            document.setFileSize(file.getSize());
+            document.setFileData(file.getBytes());
+            return toDocumentResponse(contractDocumentRepository.save(document));
+        } catch (IOException exception) {
+            throw new IllegalStateException("No se pudo leer el documento del contrato.");
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContractDocumentResponse> listDocuments(Long contractId) {
+        findContract(contractId);
+        return contractDocumentRepository.findByContractIdOrderByUploadedAtDesc(contractId).stream()
+                .map(this::toDocumentResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ContractDocument downloadDocument(Long contractId, Long documentId) {
+        ContractDocument document = contractDocumentRepository.findById(documentId)
+                .orElseThrow(() -> new EntityNotFoundException("Contract document not found."));
+
+        if (!document.getContract().getId().equals(contractId)) {
+            throw new EntityNotFoundException("Contract document not found.");
+        }
+
+        return document;
+    }
+
     private Employee findEmployee(Long employeeId) {
         return employeeRepository.findDetailedById(employeeId)
                 .orElseThrow(() -> new EntityNotFoundException("Employee not found."));
@@ -142,8 +190,43 @@ public class ContractService {
                 contract.getEndDate(),
                 contract.getStatus().name(),
                 contract.getNotes(),
-                contract.getPreviousContract() != null ? contract.getPreviousContract().getId() : null
+                contract.getPreviousContract() != null ? contract.getPreviousContract().getId() : null,
+                contractDocumentRepository.countByContractId(contract.getId())
         );
+    }
+
+    private ContractDocumentResponse toDocumentResponse(ContractDocument document) {
+        return new ContractDocumentResponse(
+                document.getId(),
+                document.getContract().getId(),
+                document.getFileName(),
+                document.getContentType(),
+                document.getFileSize(),
+                document.getUploadedAt()
+        );
+    }
+
+    private void validateDocument(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Debe seleccionar un documento.");
+        }
+        if (file.getSize() > MAX_DOCUMENT_SIZE_BYTES) {
+            throw new IllegalArgumentException("El documento no puede superar 10 MB.");
+        }
+    }
+
+    private String normalizeFileName(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "documento-contrato";
+        }
+        return fileName.replace("\\", "/").substring(fileName.replace("\\", "/").lastIndexOf('/') + 1);
+    }
+
+    private String normalizeContentType(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return "application/octet-stream";
+        }
+        return contentType;
     }
 
     private String normalizeNullable(String value) {

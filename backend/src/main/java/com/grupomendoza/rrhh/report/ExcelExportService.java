@@ -12,16 +12,39 @@ import org.springframework.stereotype.Service;
 @Service
 public class ExcelExportService {
     public byte[] export(String sheetName, List<String> headers, List<List<String>> rows) {
+        return export(sheetName, List.of(), headers, rows);
+    }
+
+    public byte[] export(
+            String sheetName,
+            List<List<String>> kpis,
+            List<String> headers,
+            List<List<String>> rows
+    ) {
         try (XSSFWorkbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             XSSFSheet sheet = workbook.createSheet(sheetName);
-            writeRow(sheet.createRow(0), headers);
+            int rowIndex = 0;
 
-            for (int index = 0; index < rows.size(); index++) {
-                writeRow(sheet.createRow(index + 1), rows.get(index));
+            if (!kpis.isEmpty()) {
+                writeRow(sheet.createRow(rowIndex++), List.of("KPIs"));
+                for (List<String> kpi : kpis) {
+                    writeRow(sheet.createRow(rowIndex++), kpi);
+                }
+                rowIndex++;
             }
 
-            for (int column = 0; column < headers.size(); column++) {
+            writeRow(sheet.createRow(rowIndex++), headers);
+
+            for (int index = 0; index < rows.size(); index++) {
+                writeRow(sheet.createRow(rowIndex + index), rows.get(index));
+            }
+
+            int columnCount = Math.max(
+                    headers.size(),
+                    kpis.stream().mapToInt(List::size).max().orElse(0)
+            );
+            for (int column = 0; column < columnCount; column++) {
                 sheet.autoSizeColumn(column);
             }
 

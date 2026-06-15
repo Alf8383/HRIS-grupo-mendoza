@@ -7,7 +7,7 @@ type CardSkeletonProps = {
 
 export function CardSkeleton({ header = true, lines = 4 }: CardSkeletonProps) {
   return (
-    <div className="rounded-3xl border p-6">
+    <div className="rounded-2xl border border-border/60 bg-card p-6 shadow-sm">
       {header ? (
         <>
           <Skeleton className="mb-2 h-6 w-40" />

@@ -98,6 +98,7 @@ public class ReportService {
                 .toList();
         return excelExportService.export(
                 "Empleados",
+                employeeKpis(rows),
                 List.of("ID", "Nombre", "Correo", "Rol", "DNI", "Teléfono", "Ingreso", "Área", "Cargo", "Sede", "Estado"),
                 values
         );
@@ -164,6 +165,7 @@ public class ReportService {
                 .toList();
         return excelExportService.export(
                 "Asistencia",
+                attendanceKpis(rows),
                 List.of("ID", "Empleado ID", "Empleado", "Correo", "Área", "Cargo", "Sede", "Fecha", "Entrada", "Salida", "Estado", "Tardanza", "Origen", "Notas", "Justificación"),
                 values
         );
@@ -247,6 +249,7 @@ public class ReportService {
                 .toList();
         return excelExportService.export(
                 "Solicitudes",
+                requestKpis(rows),
                 List.of("Grupo", "ID", "Empleado ID", "Empleado", "Correo", "Área", "Cargo", "Sede", "Tipo", "Estado", "Inicio", "Fin", "Detalle", "Revisado por", "Comentario", "Creado"),
                 values
         );
@@ -303,9 +306,89 @@ public class ReportService {
                 .toList();
         return excelExportService.export(
                 "Contratos",
+                contractKpis(rows, thresholdDays != null ? thresholdDays : DEFAULT_CONTRACT_THRESHOLD_DAYS),
                 List.of("Contrato ID", "Empleado ID", "Empleado", "Correo", "Área", "Cargo", "Sede", "Tipo", "Inicio", "Fin", "Estado", "Días por vencer"),
                 values
         );
+    }
+
+    private List<List<String>> employeeKpis(List<EmployeeReportRow> rows) {
+        long activeCount = rows.stream().filter(row -> "ACTIVE".equals(row.employeeStatus())).count();
+        long inactiveCount = rows.stream().filter(row -> "INACTIVE".equals(row.employeeStatus())).count();
+        long areaCount = rows.stream().map(EmployeeReportRow::areaName).distinct().count();
+
+        return List.of(
+                kpi("Total empleados", rows.size(), "Resultados con los filtros actuales"),
+                kpi("Activos", activeCount, "Colaboradores habilitados"),
+                kpi("Inactivos", inactiveCount, "Registros fuera de operación"),
+                kpi("Áreas", areaCount, "Áreas representadas en el reporte")
+        );
+    }
+
+    private List<List<String>> attendanceKpis(List<AttendanceReportRow> rows) {
+        long presentCount = rows.stream()
+                .filter(row -> !isAbsentStatus(row.status()))
+                .count();
+        long lateCount = rows.stream()
+                .filter(row -> "LATE".equals(row.status()) || "JUSTIFIED_LATE".equals(row.status()))
+                .count();
+        long absentCount = rows.stream()
+                .filter(row -> isAbsentStatus(row.status()))
+                .count();
+        List<AttendanceReportRow> lateRows = rows.stream()
+                .filter(row -> row.lateMinutes() != null && row.lateMinutes() > 0)
+                .toList();
+        long averageLateMinutes = lateRows.isEmpty()
+                ? 0
+                : Math.round(lateRows.stream().mapToInt(AttendanceReportRow::lateMinutes).average().orElse(0));
+        long attendanceRate = rows.isEmpty() ? 0 : Math.round((presentCount * 100.0) / rows.size());
+
+        return List.of(
+                kpi("Tasa de asistencia", attendanceRate + "%", presentCount + " de " + rows.size() + " registro(s)"),
+                kpi("Presentes", presentCount, "Incluye tardanzas justificadas y no justificadas"),
+                kpi("Tardanzas", lateCount, averageLateMinutes + " min promedio"),
+                kpi("Inasistencias", absentCount, "Ausencias justificadas y pendientes")
+        );
+    }
+
+    private List<List<String>> requestKpis(List<RequestReportRow> rows) {
+        long pendingCount = rows.stream().filter(row -> "PENDING".equals(row.requestStatus())).count();
+        long approvedCount = rows.stream().filter(row -> "APPROVED".equals(row.requestStatus())).count();
+        long rejectedOrCancelledCount = rows.stream()
+                .filter(row -> "REJECTED".equals(row.requestStatus()) || "CANCELLED".equals(row.requestStatus()))
+                .count();
+        long vacationCount = rows.stream().filter(row -> "VACATION".equals(row.sourceGroup())).count();
+
+        return List.of(
+                kpi("Total solicitudes", rows.size(), "Permisos, licencias y vacaciones"),
+                kpi("Pendientes", pendingCount, "Requieren revisión"),
+                kpi("Aprobadas", approvedCount, "Solicitudes aceptadas"),
+                kpi("Vacaciones", vacationCount, rejectedOrCancelledCount + " rechazada(s) o cancelada(s)")
+        );
+    }
+
+    private List<List<String>> contractKpis(List<ExpiringContractReportRow> rows, int thresholdDays) {
+        long urgentCount = rows.stream().filter(row -> row.daysUntilExpiration() <= 7).count();
+        long averageDays = rows.isEmpty()
+                ? 0
+                : Math.round(rows.stream().mapToLong(ExpiringContractReportRow::daysUntilExpiration).average().orElse(0));
+        long fixedTermCount = rows.stream().filter(row -> "FIXED_TERM".equals(row.contractType())).count();
+        long areaCount = rows.stream().map(ExpiringContractReportRow::areaName).distinct().count();
+
+        return List.of(
+                kpi("Por vencer", rows.size(), "Dentro de " + thresholdDays + " día(s)"),
+                kpi("Urgentes", urgentCount, "Vencen en 7 días o menos"),
+                kpi("Días promedio", averageDays, "Hasta la fecha de vencimiento"),
+                kpi("Plazo fijo", fixedTermCount, areaCount + " área(s) involucrada(s)")
+        );
+    }
+
+    private boolean isAbsentStatus(String status) {
+        return "ABSENT".equals(status) || "JUSTIFIED_ABSENT".equals(status);
+    }
+
+    private List<String> kpi(String name, Object value, String description) {
+        return List.of(name, stringOf(value), description);
     }
 
     private EmployeeReportRow toEmployeeReportRow(Employee employee) {

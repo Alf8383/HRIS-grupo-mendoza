@@ -15,6 +15,7 @@ public record ContractResponse(
         LocalDate endDate,
         String status,
         String notes,
-        Long previousContractId
+        Long previousContractId,
+        Long documentCount
 ) {
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { History, RefreshCcw } from 'lucide-react'
+import { History, RefreshCcw, Search } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { DataTable } from '@/components/app/data-table'
+import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
 import { TableSkeleton } from '@/components/app/table-skeleton'
 import { Button } from '@/components/ui/button'
@@ -78,72 +79,78 @@ export function AuditPage() {
         }
       />
 
-      <Card className="rounded-3xl">
-        <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-          <CardDescription>
-            Refina la búsqueda para ubicar cambios y operaciones relevantes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 xl:grid-cols-5">
-          <div className="space-y-2">
-            <Label htmlFor="audit-user-search">Usuario</Label>
-            <Input
-              id="audit-user-search"
-              value={userSearch}
-              onChange={(event) => setUserSearch(event.target.value)}
-              placeholder="Correo o nombre parcial"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="audit-module">Módulo</Label>
-            <Input
-              id="audit-module"
-              value={moduleFilter}
-              onChange={(event) => setModuleFilter(event.target.value)}
-              placeholder="USER, EMPLOYEE, ATTENDANCE..."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="audit-action">Acción</Label>
-            <Input
-              id="audit-action"
-              value={actionFilter}
-              onChange={(event) => setActionFilter(event.target.value)}
-              placeholder="CREATE, UPDATE, APPROVE..."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="audit-start">Desde</Label>
-            <Input
-              id="audit-start"
-              type="date"
-              value={startDate}
-              onChange={(event) => setStartDate(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="audit-end">Hasta</Label>
-            <Input
-              id="audit-end"
-              type="date"
-              value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-3xl">
+      <Card className="rounded-2xl border-border/60 shadow-sm">
         <CardHeader>
           <CardTitle>Registros</CardTitle>
           <CardDescription>
             Trazabilidad de operaciones de negocio registradas de forma no bloqueante.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="space-y-2">
+              <Label htmlFor="audit-user-search">Usuario</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="audit-user-search"
+                  value={userSearch}
+                  onChange={(event) => setUserSearch(event.target.value)}
+                  placeholder="Correo o nombre parcial"
+                  className="rounded-lg border-border/60 pl-9"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="audit-module">Módulo</Label>
+              <Input
+                id="audit-module"
+                value={moduleFilter}
+                onChange={(event) => setModuleFilter(event.target.value)}
+                placeholder="USER, EMPLOYEE, ATTENDANCE..."
+                className="rounded-lg border-border/60"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="audit-action">Acción</Label>
+              <Input
+                id="audit-action"
+                value={actionFilter}
+                onChange={(event) => setActionFilter(event.target.value)}
+                placeholder="CREATE, UPDATE, APPROVE..."
+                className="rounded-lg border-border/60"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="audit-start">Desde</Label>
+              <Input
+                id="audit-start"
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="rounded-lg border-border/60"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="audit-end">Hasta</Label>
+              <Input
+                id="audit-end"
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                className="rounded-lg border-border/60"
+              />
+            </div>
+          </div>
+
           {loading ? (
             <TableSkeleton rows={6} columns={6} />
+          ) : logs.length === 0 ? (
+            <EmptyState
+              icon={History}
+              title="Sin registros"
+              description="No hay eventos que coincidan con los filtros seleccionados."
+            />
           ) : (
             <DataTable
               columns={[
@@ -196,9 +203,6 @@ export function AuditPage() {
               ]}
               rows={logs}
               getRowKey={(row) => row.id}
-              emptyTitle="Sin registros"
-              emptyDescription="No hay eventos que coincidan con los filtros seleccionados."
-              emptyIcon={History}
             />
           )}
         </CardContent>

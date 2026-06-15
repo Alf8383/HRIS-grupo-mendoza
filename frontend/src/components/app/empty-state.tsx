@@ -1,28 +1,42 @@
 import type { LucideIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
 
-type EmptyStateProps = {
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+interface EmptyStateProps {
+  icon: LucideIcon
   title: string
-  description: string
-  action?: ReactNode
-  icon?: LucideIcon
+  description?: string
+  actionLabel?: string
+  onAction?: () => void
+  className?: string
 }
 
-export function EmptyState({ title, description, action, icon: Icon }: EmptyStateProps) {
+export function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  actionLabel,
+  onAction,
+  className,
+}: EmptyStateProps) {
   return (
-    <div className="rounded-2xl bg-muted/30 p-10 text-center">
-      <div className="mx-auto flex max-w-md flex-col items-center gap-4">
-        {Icon ? (
-          <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-            <Icon className="size-6 text-muted-foreground/70" />
-          </div>
-        ) : null}
-        <div className="flex flex-col gap-2">
-          <h3 className="text-base font-semibold text-foreground">{title}</h3>
-          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
-        </div>
-        {action ? <div className="pt-1">{action}</div> : null}
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 px-6 py-12 text-center',
+        className,
+      )}
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="h-6 w-6" />
       </div>
+      <h3 className="mt-4 text-sm font-semibold text-foreground">{title}</h3>
+      {description && <p className="mt-1 max-w-sm text-sm text-muted-foreground">{description}</p>}
+      {actionLabel && onAction && (
+        <Button onClick={onAction} className="mt-4">
+          {actionLabel}
+        </Button>
+      )}
     </div>
   )
 }

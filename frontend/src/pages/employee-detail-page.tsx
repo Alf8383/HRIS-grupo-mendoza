@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { Breadcrumb } from '@/components/app/breadcrumb'
+import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
@@ -78,8 +79,8 @@ export function EmployeeDetailPage() {
       />
 
       {loading ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="rounded-3xl p-6">
+        <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+          <Card className="rounded-2xl border-border/60 shadow-sm p-6">
             <Skeleton className="mb-4 h-8 w-64" />
             <Skeleton className="mb-6 h-4 w-48" />
             <div className="grid gap-5 md:grid-cols-2">
@@ -91,7 +92,7 @@ export function EmployeeDetailPage() {
               ))}
             </div>
           </Card>
-          <Card className="rounded-3xl p-6">
+          <Card className="rounded-2xl border-border/60 shadow-sm p-6">
             <Skeleton className="mb-4 h-8 w-48" />
             <Skeleton className="mb-6 h-4 w-56" />
             <div className="space-y-4">
@@ -106,13 +107,13 @@ export function EmployeeDetailPage() {
           </Card>
         </div>
       ) : employee ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="rounded-3xl">
+        <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+          <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle>{employee.fullName}</CardTitle>
               <CardDescription>{employee.email}</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-5 md:grid-cols-2">
+            <CardContent className="grid gap-6 md:grid-cols-2">
               <DetailItem label="DNI" value={employee.dni} />
               <DetailItem label="Teléfono" value={employee.phone || 'Sin registro'} />
               <DetailItem label="Fecha de ingreso" value={formatDate(employee.hireDate)} />
@@ -120,17 +121,23 @@ export function EmployeeDetailPage() {
               <DetailItem label="Área" value={employee.areaName} />
               <DetailItem label="Cargo" value={employee.positionName} />
               <DetailItem label="Sede" value={employee.siteName} />
-              <DetailItem label="Estado del empleado" value={<StatusBadge value={employee.employeeStatus} />} />
+              <DetailItem
+                label="Estado del empleado"
+                value={<StatusBadge value={employee.employeeStatus} />}
+              />
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl">
+          <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle>Cuenta asociada</CardTitle>
               <CardDescription>Resumen de la cuenta de acceso vinculada al empleado.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <DetailItem label="Estado de la cuenta" value={<StatusBadge value={employee.userStatus} />} />
+              <DetailItem
+                label="Estado de la cuenta"
+                value={<StatusBadge value={employee.userStatus} />}
+              />
               <DetailItem label="Código de rol" value={employee.role} />
               <DetailItem label="Correo de acceso" value={employee.email} />
               <Button asChild className="w-full" variant="outline">
@@ -139,7 +146,7 @@ export function EmployeeDetailPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl xl:col-span-2">
+          <Card className="rounded-2xl border-border/60 shadow-sm xl:col-span-2">
             <CardHeader>
               <CardTitle>Vacaciones</CardTitle>
               <CardDescription>
@@ -147,19 +154,13 @@ export function EmployeeDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
-              <VacationStat
-                label="Disponibles"
-                value={employee.vacationAvailableDays}
-              />
+              <VacationStat label="Disponibles" value={employee.vacationAvailableDays} />
               <VacationStat label="Usados" value={employee.vacationUsedDays} />
-              <VacationStat
-                label="Pendientes"
-                value={employee.vacationPendingDays}
-              />
+              <VacationStat label="Pendientes" value={employee.vacationPendingDays} />
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl xl:col-span-2">
+          <Card className="rounded-2xl border-border/60 shadow-sm xl:col-span-2">
             <CardHeader>
               <CardTitle>Historial contractual</CardTitle>
               <CardDescription>
@@ -168,7 +169,7 @@ export function EmployeeDetailPage() {
             </CardHeader>
             <CardContent>
               {contracts.length ? (
-                <div className="overflow-hidden rounded-2xl border">
+                <div className="overflow-hidden rounded-2xl border border-border/60 bg-card">
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-left">
                       <tr>
@@ -198,7 +199,7 @@ export function EmployeeDetailPage() {
                           <td className="px-4 py-3 align-top">
                             <StatusBadge value={contract.status} />
                           </td>
-                          <td className="px-4 py-3 align-top">
+                          <td className="px-4 py-3 align-top text-muted-foreground">
                             {contract.notes ?? 'Sin notas'}
                           </td>
                         </tr>
@@ -207,16 +208,17 @@ export function EmployeeDetailPage() {
                   </table>
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed px-6 py-10 text-center text-sm text-muted-foreground">
-                  <FileBadge2 className="mx-auto mb-3 size-5" />
-                  No hay contratos registrados para este empleado.
-                </div>
+                <EmptyState
+                  icon={FileBadge2}
+                  title="Sin contratos registrados"
+                  description="Este colaborador aún no tiene un historial contractual."
+                />
               )}
             </CardContent>
           </Card>
         </div>
       ) : (
-        <Card className="rounded-3xl">
+        <Card className="rounded-2xl border-border/60 shadow-sm">
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             No se encontró el empleado solicitado.
           </CardContent>
@@ -228,7 +230,7 @@ export function EmployeeDetailPage() {
 
 function VacationStat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border bg-muted/30 p-4">
+    <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className="mt-2 text-2xl font-semibold">{value}</p>
     </div>

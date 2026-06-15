@@ -1,8 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ClipboardList, Loader2, RefreshCcw, SendHorizontal } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ClipboardList, Loader2, Plus, RefreshCcw } from 'lucide-react'
 import { toast } from 'sonner'
 
+import type { ColumnDef } from '@tanstack/react-table'
+import { ConfirmDialog } from '@/components/app/confirm-dialog'
 import { DataTable } from '@/components/app/data-table'
+import { EntityDrawer, EntityDrawerActions } from '@/components/app/entity-drawer'
+import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
 import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
@@ -16,7 +20,6 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -24,6 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/contexts/auth-context'
 import { formatDateTime } from '@/lib/format'
 import { apiRequest, getApiMessage } from '@/lib/http'
@@ -44,6 +49,14 @@ const initialForm = {
   reason: '',
 }
 
+const statusOptions = [
+  { value: 'ALL', label: 'Todos' },
+  { value: 'PENDING', label: 'Pendiente' },
+  { value: 'APPROVED', label: 'Aprobado' },
+  { value: 'REJECTED', label: 'Rechazado' },
+  { value: 'CANCELLED', label: 'Cancelado' },
+]
+
 export function LeaveRequestsPage() {
   const { session } = useAuth()
   const token = session?.token ?? ''
@@ -52,6 +65,8 @@ export function LeaveRequestsPage() {
   const showTeamRequests = roles.includes('MANAGER')
   const showAllRequests = roles.some((role) => ['ADMIN', 'HR'].includes(role))
   const canReviewAll = roles.includes('ADMIN')
+
+  const defaultTab = showOwnRequests ? 'own' : showTeamRequests ? 'team' : 'all'
 
   const [form, setForm] = useState(initialForm)
   const [myRequests, setMyRequests] = useState<LeaveRequestRecord[]>([])
@@ -72,6 +87,8 @@ export function LeaveRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [cancellingId, setCancellingId] = useState<number | null>(null)
+  const [requestDrawerOpen, setRequestDrawerOpen] = useState(false)
+  const [cancelConfirm, setCancelConfirm] = useState<number | null>(null)
 
   const buildQuery = (status: string, startDate: string, endDate: string) => {
     const params = new URLSearchParams()
@@ -157,6 +174,7 @@ export function LeaveRequestsPage() {
       })
       toast.success('Solicitud registrada correctamente.')
       setForm(initialForm)
+      setRequestDrawerOpen(false)
       await loadRequests()
     } catch (error) {
       toast.error(getApiMessage(error, 'No se pudo registrar la solicitud.'))
@@ -178,6 +196,7 @@ export function LeaveRequestsPage() {
       toast.error(getApiMessage(error, 'No se pudo cancelar la solicitud.'))
     } finally {
       setCancellingId(null)
+      setCancelConfirm(null)
     }
   }
 
@@ -206,487 +225,519 @@ export function LeaveRequestsPage() {
     }
   }
 
+  const openReview = (request: LeaveRequestRecord, mode: ReviewMode) => {
+    setReviewTarget(request)
+    setReviewMode(mode)
+    setReviewComment('')
+  }
+
+  const ownColumns = useMemo<ColumnDef<LeaveRequestRecord>[]>(
+    () => [
+      {
+        accessorKey: 'type',
+        header: 'Tipo',
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium text-foreground">
+              {LEAVE_TYPE_LABELS[row.original.requestType] ?? row.original.requestType}
+            </p>
+            <p className="text-xs text-muted-foreground">{row.original.reason}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'period',
+        header: 'Periodo',
+        cell: ({ row }) => (
+          <div className="text-sm">
+            <p>{formatDateTime(row.original.startAt)}</p>
+            <p className="text-muted-foreground">{formatDateTime(row.original.endAt)}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Estado',
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            <StatusBadge value={row.original.status} />
+            {row.original.reviewComment ? (
+              <p className="text-xs text-muted-foreground">{row.original.reviewComment}</p>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Acciones',
+        cell: ({ row }) =>
+          row.original.status === 'PENDING' ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={cancellingId === row.original.id}
+              onClick={() => setCancelConfirm(row.original.id)}
+            >
+              {cancellingId === row.original.id ? <Loader2 className="size-4 animate-spin" /> : 'Cancelar'}
+            </Button>
+          ) : (
+            <span className="text-xs text-muted-foreground">Sin acciones</span>
+          ),
+      },
+    ],
+    [cancellingId],
+  )
+
+  const teamColumns = useMemo<ColumnDef<LeaveRequestRecord>[]>(
+    () => [
+      {
+        accessorKey: 'employee',
+        header: 'Empleado',
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium text-foreground">{row.original.employeeName}</p>
+            <p className="text-sm text-muted-foreground">{row.original.positionName}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'request',
+        header: 'Solicitud',
+        cell: ({ row }) => (
+          <div className="text-sm">
+            <p>{LEAVE_TYPE_LABELS[row.original.requestType] ?? row.original.requestType}</p>
+            <p className="text-muted-foreground">{formatDateTime(row.original.startAt)}</p>
+            <p className="text-xs text-muted-foreground">{row.original.reason}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Estado',
+        cell: ({ row }) => <StatusBadge value={row.original.status} />,
+      },
+      {
+        id: 'actions',
+        header: 'Acciones',
+        cell: ({ row }) =>
+          row.original.status === 'PENDING' ? (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => openReview(row.original, 'approve')}>
+                Aprobar
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openReview(row.original, 'reject')}>
+                Rechazar
+              </Button>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">Sin acciones</span>
+          ),
+      },
+    ],
+    [],
+  )
+
+  const allColumns = useMemo<ColumnDef<LeaveRequestRecord>[]>(
+    () => [
+      {
+        accessorKey: 'employee',
+        header: 'Empleado',
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium text-foreground">{row.original.employeeName}</p>
+            <p className="text-sm text-muted-foreground">{row.original.areaName}</p>
+            <p className="text-xs text-muted-foreground">{row.original.siteName}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'request',
+        header: 'Solicitud',
+        cell: ({ row }) => (
+          <div className="text-sm">
+            <p>{LEAVE_TYPE_LABELS[row.original.requestType] ?? row.original.requestType}</p>
+            <p className="text-muted-foreground">{formatDateTime(row.original.startAt)}</p>
+            <p className="text-xs text-muted-foreground">{row.original.reason}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Estado',
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            <StatusBadge value={row.original.status} />
+            {row.original.reviewComment ? (
+              <p className="text-xs text-muted-foreground">{row.original.reviewComment}</p>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Acciones',
+        cell: ({ row }) =>
+          canReviewAll && row.original.status === 'PENDING' ? (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => openReview(row.original, 'approve')}>
+                Aprobar
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => openReview(row.original, 'reject')}>
+                Rechazar
+              </Button>
+            </div>
+          ) : (
+            <span className="text-xs text-muted-foreground">Consulta</span>
+          ),
+      },
+    ],
+    [canReviewAll],
+  )
+
+  const renderFilters = (
+    status: string,
+    setStatus: (value: string) => void,
+    startDate: string,
+    setStartDate: (value: string) => void,
+    endDate: string,
+    setEndDate: (value: string) => void,
+    idPrefix: string,
+  ) => (
+    <div className="grid gap-4 md:grid-cols-3">
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-status`}>Estado</Label>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger id={`${idPrefix}-status`} className="rounded-lg border-border/60">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            {statusOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-start`}>Desde</Label>
+        <Input
+          id={`${idPrefix}-start`}
+          type="date"
+          value={startDate}
+          onChange={(event) => setStartDate(event.target.value)}
+          className="rounded-lg border-border/60"
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor={`${idPrefix}-end`}>Hasta</Label>
+        <Input
+          id={`${idPrefix}-end`}
+          type="date"
+          value={endDate}
+          onChange={(event) => setEndDate(event.target.value)}
+          className="rounded-lg border-border/60"
+        />
+      </div>
+    </div>
+  )
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Permisos y licencias"
         description="Registra solicitudes, controla sus estados y gestiona aprobaciones según tu rol."
         actions={
-          <Button type="button" variant="outline" onClick={() => void loadRequests()}>
-            <RefreshCcw />
-            Actualizar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void loadRequests()}
+            >
+              <RefreshCcw />
+              Actualizar
+            </Button>
+            {showOwnRequests && (
+              <Button onClick={() => setRequestDrawerOpen(true)}>
+                <Plus className="mr-1.5 size-4" />
+                Nueva solicitud
+              </Button>
+            )}
+          </div>
         }
       />
 
-      {showOwnRequests ? (
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(360px,420px)]">
-          <Card className="rounded-3xl">
-            <CardHeader>
-              <CardTitle>Mis solicitudes</CardTitle>
-              <CardDescription>Consulta tus solicitudes y sus estados.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="space-y-2">
-                  <Label htmlFor="my-leaves-status">Estado</Label>
-                  <Select value={myStatus} onValueChange={setMyStatus}>
-                    <SelectTrigger id="my-leaves-status">
-                      <SelectValue placeholder="Estado" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">Todos</SelectItem>
-                      <SelectItem value="PENDING">Pendiente</SelectItem>
-                      <SelectItem value="APPROVED">Aprobado</SelectItem>
-                      <SelectItem value="REJECTED">Rechazado</SelectItem>
-                      <SelectItem value="CANCELLED">Cancelado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="my-leaves-start">Desde</Label>
-                  <Input
-                    id="my-leaves-start"
-                    type="date"
-                    value={myStartDate}
-                    onChange={(event) => setMyStartDate(event.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="my-leaves-end">Hasta</Label>
-                  <Input
-                    id="my-leaves-end"
-                    type="date"
-                    value={myEndDate}
-                    onChange={(event) => setMyEndDate(event.target.value)}
-                  />
-                </div>
-              </div>
+      {showOwnRequests || showTeamRequests || showAllRequests ? (
+        <Tabs defaultValue={defaultTab} className="w-full">
+          <TabsList className="mb-4">
+            {showOwnRequests && <TabsTrigger value="own">Mis solicitudes</TabsTrigger>}
+            {showTeamRequests && <TabsTrigger value="team">Equipo</TabsTrigger>}
+            {showAllRequests && <TabsTrigger value="all">Todas</TabsTrigger>}
+          </TabsList>
 
-              {loading ? (
-                <TableSkeleton rows={4} columns={4} />
-              ) : (
-                <DataTable
-                  columns={[
-                    {
-                      key: 'type',
-                      header: 'Tipo',
-                      render: (request) => (
-                        <div>
-                          <p className="font-medium">{LEAVE_TYPE_LABELS[request.requestType] ?? request.requestType}</p>
-                          <p className="text-xs text-muted-foreground">{request.reason}</p>
-                        </div>
-                      ),
-                    },
-                    {
-                      key: 'period',
-                      header: 'Periodo',
-                      render: (request) => (
-                        <div>
-                          <p>{formatDateTime(request.startAt)}</p>
-                          <p className="text-muted-foreground">{formatDateTime(request.endAt)}</p>
-                        </div>
-                      ),
-                    },
-                    {
-                      key: 'status',
-                      header: 'Estado',
-                      render: (request) => (
-                        <div className="space-y-2">
-                          <StatusBadge value={request.status} />
-                          {request.reviewComment ? (
-                            <p className="text-xs text-muted-foreground">{request.reviewComment}</p>
-                          ) : null}
-                        </div>
-                      ),
-                    },
-                    {
-                      key: 'actions',
-                      header: 'Acciones',
-                      render: (request) =>
-                        request.status === 'PENDING' ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={cancellingId === request.id}
-                            onClick={() => void handleCancel(request.id)}
-                          >
-                            {cancellingId === request.id ? <Loader2 className="animate-spin size-4" /> : 'Cancelar'}
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Sin acciones</span>
-                        ),
-                    },
-                  ]}
-                  rows={myRequests}
-                  getRowKey={(request) => request.id}
-                  emptyTitle="No hay solicitudes registradas"
-                  emptyDescription="Tus solicitudes aparecerán aquí cuando las envíes."
-                  emptyIcon={ClipboardList}
-                />
-              )}
-            </CardContent>
-          </Card>
+          {showOwnRequests && (
+            <TabsContent value="own">
+              <Card className="rounded-2xl border-border/60 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Mis solicitudes</CardTitle>
+                  <CardDescription>Consulta tus solicitudes y sus estados.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {renderFilters(
+                    myStatus,
+                    setMyStatus,
+                    myStartDate,
+                    setMyStartDate,
+                    myEndDate,
+                    setMyEndDate,
+                    'my-leaves',
+                  )}
 
-          <Card className="rounded-3xl">
-            <CardHeader>
-              <CardTitle>Nueva solicitud</CardTitle>
-              <CardDescription>Registra un permiso o licencia indicando el rango solicitado.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={handleCreate}>
-                <div className="space-y-2">
-                  <Label htmlFor="leave-type">Tipo</Label>
-                  <Select
-                    value={form.requestType}
-                    onValueChange={(value) =>
-                      setForm((current) => ({ ...current, requestType: value }))
-                    }
-                  >
-                    <SelectTrigger id="leave-type">
-                      <SelectValue placeholder="Tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(LEAVE_TYPE_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="leave-start-at">Inicio</Label>
-                    <Input
-                      id="leave-start-at"
-                      type="datetime-local"
-                      value={form.startAt}
-                      onChange={(event) =>
-                        setForm((current) => ({ ...current, startAt: event.target.value }))
+                  {loading ? (
+                    <TableSkeleton rows={4} columns={4} />
+                  ) : (
+                    <DataTable
+                      columns={ownColumns}
+                      data={myRequests}
+                      searchPlaceholder="Buscar solicitud..."
+                      pageSize={10}
+                      emptyState={
+                        <EmptyState
+                          icon={ClipboardList}
+                          title="No hay solicitudes registradas"
+                          description="Tus solicitudes aparecerán aquí cuando las envíes."
+                          actionLabel="Nueva solicitud"
+                          onAction={() => setRequestDrawerOpen(true)}
+                        />
                       }
-                      required
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="leave-end-at">Fin</Label>
-                    <Input
-                      id="leave-end-at"
-                      type="datetime-local"
-                      value={form.endAt}
-                      onChange={(event) =>
-                        setForm((current) => ({ ...current, endAt: event.target.value }))
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {showTeamRequests && (
+            <TabsContent value="team">
+              <Card className="rounded-2xl border-border/60 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Solicitudes del equipo</CardTitle>
+                  <CardDescription>Aprueba o rechaza solicitudes del personal de tu área.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {renderFilters(
+                    teamStatus,
+                    setTeamStatus,
+                    teamStartDate,
+                    setTeamStartDate,
+                    teamEndDate,
+                    setTeamEndDate,
+                    'team-leaves',
+                  )}
+
+                  {loading ? (
+                    <TableSkeleton rows={4} columns={4} />
+                  ) : (
+                    <DataTable
+                      columns={teamColumns}
+                      data={teamRequests}
+                      searchPlaceholder="Buscar solicitud..."
+                      pageSize={10}
+                      emptyState={
+                        <EmptyState
+                          icon={ClipboardList}
+                          title="No hay solicitudes del equipo"
+                          description="Las solicitudes del personal de tu área aparecerán aquí."
+                        />
                       }
-                      required
                     />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="leave-reason">Motivo</Label>
-                  <Textarea
-                    id="leave-reason"
-                    value={form.reason}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, reason: event.target.value }))
-                    }
-                    placeholder="Describe el motivo de la solicitud"
-                    required
-                  />
-                </div>
-                <Button disabled={saving} type="submit">
-                  {saving ? <Loader2 className="animate-spin" /> : <SendHorizontal />}
-                  Enviar solicitud
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </section>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {showAllRequests && (
+            <TabsContent value="all">
+              <Card className="rounded-2xl border-border/60 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Solicitudes globales</CardTitle>
+                  <CardDescription>Consulta consolidada para administración y RR. HH.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {renderFilters(
+                    allStatus,
+                    setAllStatus,
+                    allStartDate,
+                    setAllStartDate,
+                    allEndDate,
+                    setAllEndDate,
+                    'all-leaves',
+                  )}
+
+                  {loading ? (
+                    <TableSkeleton rows={4} columns={4} />
+                  ) : (
+                    <DataTable
+                      columns={allColumns}
+                      data={allRequests}
+                      searchPlaceholder="Buscar solicitud..."
+                      pageSize={10}
+                      emptyState={
+                        <EmptyState
+                          icon={ClipboardList}
+                          title="No hay solicitudes para mostrar"
+                          description="La vista global se llenará cuando existan solicitudes registradas."
+                        />
+                      }
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+        </Tabs>
       ) : null}
 
-      {showTeamRequests ? (
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>Solicitudes del equipo</CardTitle>
-            <CardDescription>Aprueba o rechaza solicitudes del personal de tu área.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="team-leaves-status">Estado</Label>
-                <Select value={teamStatus} onValueChange={setTeamStatus}>
-                  <SelectTrigger id="team-leaves-status">
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    <SelectItem value="PENDING">Pendiente</SelectItem>
-                    <SelectItem value="APPROVED">Aprobado</SelectItem>
-                    <SelectItem value="REJECTED">Rechazado</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="team-leaves-start">Desde</Label>
-                <Input
-                  id="team-leaves-start"
-                  type="date"
-                  value={teamStartDate}
-                  onChange={(event) => setTeamStartDate(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="team-leaves-end">Hasta</Label>
-                <Input
-                  id="team-leaves-end"
-                  type="date"
-                  value={teamEndDate}
-                  onChange={(event) => setTeamEndDate(event.target.value)}
-                />
-              </div>
-            </div>
-
-            {loading ? (
-              <TableSkeleton rows={4} columns={4} />
-            ) : (
-              <DataTable
-                columns={[
-                  {
-                    key: 'employee',
-                    header: 'Empleado',
-                    render: (request) => (
-                      <div>
-                        <p className="font-medium">{request.employeeName}</p>
-                        <p className="text-muted-foreground">{request.positionName}</p>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'request',
-                    header: 'Solicitud',
-                    render: (request) => (
-                      <div>
-                        <p>{LEAVE_TYPE_LABELS[request.requestType] ?? request.requestType}</p>
-                        <p className="text-muted-foreground">{formatDateTime(request.startAt)}</p>
-                        <p className="text-xs text-muted-foreground">{request.reason}</p>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'status',
-                    header: 'Estado',
-                    render: (request) => <StatusBadge value={request.status} />,
-                  },
-                  {
-                    key: 'actions',
-                    header: 'Acciones',
-                    render: (request) =>
-                      request.status === 'PENDING' ? (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setReviewTarget(request)
-                              setReviewMode('approve')
-                              setReviewComment('')
-                            }}
-                          >
-                            Aprobar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setReviewTarget(request)
-                              setReviewMode('reject')
-                              setReviewComment('')
-                            }}
-                          >
-                            Rechazar
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Sin acciones</span>
-                      ),
-                  },
-                ]}
-                rows={teamRequests}
-                getRowKey={(request) => request.id}
-                emptyTitle="No hay solicitudes del equipo"
-                emptyDescription="Las solicitudes del personal de tu área aparecerán aquí."
-                emptyIcon={ClipboardList}
+      <EntityDrawer
+        open={requestDrawerOpen}
+        onOpenChange={setRequestDrawerOpen}
+        title="Nueva solicitud"
+        description="Registra un permiso o licencia indicando el rango solicitado."
+        footer={
+          <EntityDrawerActions
+            onCancel={() => {
+              setRequestDrawerOpen(false)
+              setForm(initialForm)
+            }}
+            isLoading={saving}
+            submitLabel="Enviar solicitud"
+            form="leave-request-form"
+          />
+        }
+      >
+        <form id="leave-request-form" onSubmit={handleCreate} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="leave-type">Tipo</Label>
+            <Select
+              value={form.requestType}
+              onValueChange={(value) => setForm((current) => ({ ...current, requestType: value }))}
+            >
+              <SelectTrigger id="leave-type" className="rounded-lg border-border/60">
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(LEAVE_TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="leave-start-at">Inicio</Label>
+              <Input
+                id="leave-start-at"
+                type="datetime-local"
+                value={form.startAt}
+                onChange={(event) => setForm((current) => ({ ...current, startAt: event.target.value }))}
+                required
+                className="rounded-lg border-border/60"
               />
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {showAllRequests ? (
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>Solicitudes globales</CardTitle>
-            <CardDescription>Consulta consolidada para administración y RR. HH.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="all-leaves-status">Estado</Label>
-                <Select value={allStatus} onValueChange={setAllStatus}>
-                  <SelectTrigger id="all-leaves-status">
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    <SelectItem value="PENDING">Pendiente</SelectItem>
-                    <SelectItem value="APPROVED">Aprobado</SelectItem>
-                    <SelectItem value="REJECTED">Rechazado</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="all-leaves-start">Desde</Label>
-                <Input
-                  id="all-leaves-start"
-                  type="date"
-                  value={allStartDate}
-                  onChange={(event) => setAllStartDate(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="all-leaves-end">Hasta</Label>
-                <Input
-                  id="all-leaves-end"
-                  type="date"
-                  value={allEndDate}
-                  onChange={(event) => setAllEndDate(event.target.value)}
-                />
-              </div>
             </div>
-
-            {loading ? (
-              <TableSkeleton rows={4} columns={4} />
-            ) : (
-              <DataTable
-                columns={[
-                  {
-                    key: 'employee',
-                    header: 'Empleado',
-                    render: (request) => (
-                      <div>
-                        <p className="font-medium">{request.employeeName}</p>
-                        <p className="text-muted-foreground">{request.areaName}</p>
-                        <p className="text-xs text-muted-foreground">{request.siteName}</p>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'request',
-                    header: 'Solicitud',
-                    render: (request) => (
-                      <div>
-                        <p>{LEAVE_TYPE_LABELS[request.requestType] ?? request.requestType}</p>
-                        <p className="text-muted-foreground">{formatDateTime(request.startAt)}</p>
-                        <p className="text-xs text-muted-foreground">{request.reason}</p>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'status',
-                    header: 'Estado',
-                    render: (request) => (
-                      <div className="space-y-2">
-                        <StatusBadge value={request.status} />
-                        {request.reviewComment ? (
-                          <p className="text-xs text-muted-foreground">{request.reviewComment}</p>
-                        ) : null}
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'actions',
-                    header: 'Acciones',
-                    render: (request) =>
-                      canReviewAll && request.status === 'PENDING' ? (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setReviewTarget(request)
-                              setReviewMode('approve')
-                              setReviewComment('')
-                            }}
-                          >
-                            Aprobar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setReviewTarget(request)
-                              setReviewMode('reject')
-                              setReviewComment('')
-                            }}
-                          >
-                            Rechazar
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Consulta</span>
-                      ),
-                  },
-                ]}
-                rows={allRequests}
-                getRowKey={(request) => request.id}
-                emptyTitle="No hay solicitudes para mostrar"
-                emptyDescription="La vista global se llenará cuando existan solicitudes registradas."
-                emptyIcon={ClipboardList}
+            <div className="space-y-2">
+              <Label htmlFor="leave-end-at">Fin</Label>
+              <Input
+                id="leave-end-at"
+                type="datetime-local"
+                value={form.endAt}
+                onChange={(event) => setForm((current) => ({ ...current, endAt: event.target.value }))}
+                required
+                className="rounded-lg border-border/60"
               />
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="leave-reason">Motivo</Label>
+            <Textarea
+              id="leave-reason"
+              value={form.reason}
+              onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))}
+              placeholder="Describe el motivo de la solicitud"
+              required
+              className="rounded-lg border-border/60"
+            />
+          </div>
+          {saving && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> Enviando...
+            </div>
+          )}
+        </form>
+      </EntityDrawer>
 
-      {reviewTarget ? (
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>{reviewMode === 'approve' ? 'Aprobar solicitud' : 'Rechazar solicitud'}</CardTitle>
-            <CardDescription>
-              {reviewTarget.employeeName} · {LEAVE_TYPE_LABELS[reviewTarget.requestType] ?? reviewTarget.requestType}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleReview}>
-              <div className="space-y-2">
-                <Label htmlFor="leave-review-comment">Comentario</Label>
-                <Textarea
-                  id="leave-review-comment"
-                  value={reviewComment}
-                  onChange={(event) => setReviewComment(event.target.value)}
-                  placeholder="Escribe una observación sobre la decisión"
-                  required
-                />
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Button disabled={saving} type="submit">
-                  {saving ? <Loader2 className="animate-spin" /> : null}
-                  {reviewMode === 'approve' ? 'Confirmar aprobación' : 'Confirmar rechazo'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setReviewTarget(null)
-                    setReviewComment('')
-                  }}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      ) : null}
+      <EntityDrawer
+        open={reviewTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReviewTarget(null)
+            setReviewComment('')
+          }
+        }}
+        title={reviewMode === 'approve' ? 'Aprobar solicitud' : 'Rechazar solicitud'}
+        description={
+          reviewTarget
+            ? `${reviewTarget.employeeName} · ${LEAVE_TYPE_LABELS[reviewTarget.requestType] ?? reviewTarget.requestType}`
+            : ''
+        }
+        footer={
+          <EntityDrawerActions
+            onCancel={() => {
+              setReviewTarget(null)
+              setReviewComment('')
+            }}
+            isLoading={saving}
+            submitLabel={reviewMode === 'approve' ? 'Confirmar aprobación' : 'Confirmar rechazo'}
+            form="leave-review-form"
+          />
+        }
+      >
+        <form id="leave-review-form" onSubmit={handleReview} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="leave-review-comment">Comentario</Label>
+            <Textarea
+              id="leave-review-comment"
+              value={reviewComment}
+              onChange={(event) => setReviewComment(event.target.value)}
+              placeholder="Escribe una observación sobre la decisión"
+              required
+              className="rounded-lg border-border/60"
+            />
+          </div>
+          {saving && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> Guardando...
+            </div>
+          )}
+        </form>
+      </EntityDrawer>
+
+      <ConfirmDialog
+        open={cancelConfirm !== null}
+        onOpenChange={() => setCancelConfirm(null)}
+        title="Cancelar solicitud"
+        description="¿Deseas cancelar esta solicitud? Esta acción no se puede deshacer."
+        variant="destructive"
+        confirmLabel="Cancelar solicitud"
+        isLoading={cancellingId !== null}
+        onConfirm={() => {
+          if (cancelConfirm !== null) {
+            void handleCancel(cancelConfirm)
+          }
+        }}
+      />
     </div>
   )
 }

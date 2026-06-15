@@ -196,6 +196,16 @@ export type ContractRecord = {
   status: string
   notes: string | null
   previousContractId: number | null
+  documentCount: number
+}
+
+export type ContractDocumentRecord = {
+  id: number
+  contractId: number
+  fileName: string
+  contentType: string
+  fileSize: number
+  uploadedAt: string
 }
 
 export type ExpiringContractItem = {

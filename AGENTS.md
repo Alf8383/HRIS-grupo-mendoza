@@ -244,7 +244,7 @@ Todas las llamadas al backend usan `apiRequest<T>(path, options)` definido en `l
 - Tailwind CSS v4 con configuración mínima en `tailwind.config.ts`.
 - shadcn/ui como sistema de componentes base. Los componentes UI viven en `src/components/ui/`.
 - Función `cn(...)` de `lib/utils.ts` para combinar clases con `clsx` + `tailwind-merge`.
-- Paleta base: `neutral` (shadcn/ui).
+- Paleta base: `warm professional` (tonos ámbar/piedra) con acento primario ámbar y fondo stone-50.
 - Fuente: Geist Variable (`@fontsource-variable/geist`).
 - Iconos: Lucide React.
 - Notificaciones: Sonner (`<Toaster richColors position="top-right" />`).

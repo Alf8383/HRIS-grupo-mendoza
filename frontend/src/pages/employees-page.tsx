@@ -1,21 +1,32 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Eye, Loader2, PencilLine, Plus, RefreshCcw, Users } from 'lucide-react'
+import type { ColumnDef } from '@tanstack/react-table'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Eye,
+  Loader2,
+  MoreHorizontal,
+  PencilLine,
+  Plus,
+  Power,
+  PowerOff,
+  Users,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { CardSkeleton } from '@/components/app/card-skeleton'
+import { ConfirmDialog } from '@/components/app/confirm-dialog'
 import { DataTable } from '@/components/app/data-table'
+import { EntityDrawer, EntityDrawerActions } from '@/components/app/entity-drawer'
+import { EmptyState } from '@/components/app/empty-state'
 import { PageHeader } from '@/components/app/page-header'
 import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -26,7 +37,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/auth-context'
-import { formatDate } from '@/lib/format'
 import { apiRequest, getApiMessage } from '@/lib/http'
 import { ROLE_LABELS } from '@/lib/roles'
 import { useDebounce } from '@/lib/use-debounce'
@@ -56,12 +66,17 @@ export function EmployeesPage() {
   const [positions, setPositions] = useState<Position[]>([])
   const [sites, setSites] = useState<Site[]>([])
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [form, setForm] = useState(initialForm)
   const [errors, setErrors] = useState(initialErrors)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('ALL')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [confirmStatus, setConfirmStatus] = useState<{
+    employee: EmployeeRecord
+    nextStatus: 'ACTIVE' | 'INACTIVE'
+  } | null>(null)
 
   const debouncedSearch = useDebounce(search, 400)
 
@@ -91,7 +106,6 @@ export function EmployeesPage() {
         `/employees${params.size ? `?${params.toString()}` : ''}`,
         { token },
       )
-
       setEmployees(response)
     } catch (error) {
       toast.error(getApiMessage(error, 'No se pudieron cargar los empleados.'))
@@ -118,7 +132,12 @@ export function EmployeesPage() {
     setErrors(initialErrors)
   }
 
-  const startEdit = (employee: EmployeeRecord) => {
+  const openCreate = () => {
+    resetForm()
+    setDrawerOpen(true)
+  }
+
+  const startEdit = useCallback((employee: EmployeeRecord) => {
     const matchedPosition = positions.find((position) => position.name === employee.positionName)
     const matchedSite = sites.find((site) => site.name === employee.siteName)
 
@@ -135,7 +154,8 @@ export function EmployeesPage() {
       siteId: matchedSite ? String(matchedSite.id) : '',
     })
     setErrors(initialErrors)
-  }
+    setDrawerOpen(true)
+  }, [positions, sites])
 
   const validateForm = (): boolean => {
     const nextErrors: Record<string, string> = {}
@@ -170,7 +190,6 @@ export function EmployeesPage() {
     if (!validateForm()) return
 
     setSaving(true)
-
     try {
       const payload = editingId
         ? {
@@ -201,7 +220,10 @@ export function EmployeesPage() {
         body: JSON.stringify(payload),
       })
 
-      toast.success(editingId ? 'Empleado actualizado correctamente.' : 'Empleado registrado correctamente.')
+      toast.success(
+        editingId ? 'Empleado actualizado correctamente.' : 'Empleado registrado correctamente.',
+      )
+      setDrawerOpen(false)
       resetForm()
       await loadEmployees()
     } catch (error) {
@@ -211,22 +233,106 @@ export function EmployeesPage() {
     }
   }
 
-  const handleStatusChange = async (
-    employee: EmployeeRecord,
-    nextStatus: 'ACTIVE' | 'INACTIVE',
-  ) => {
+  const handleStatusChange = async (employee: EmployeeRecord, nextStatus: 'ACTIVE' | 'INACTIVE') => {
+    setConfirmStatus({ employee, nextStatus })
+  }
+
+  const confirmStatusChange = async () => {
+    if (!confirmStatus) return
     try {
-      await apiRequest(`/employees/${employee.id}/status`, {
+      await apiRequest(`/employees/${confirmStatus.employee.id}/status`, {
         method: 'PATCH',
         token,
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: confirmStatus.nextStatus }),
       })
-      toast.success(nextStatus === 'ACTIVE' ? 'Empleado activado correctamente.' : 'Empleado desactivado correctamente.')
+      toast.success(
+        confirmStatus.nextStatus === 'ACTIVE'
+          ? 'Empleado activado correctamente.'
+          : 'Empleado desactivado correctamente.',
+      )
       await loadEmployees()
     } catch (error) {
       toast.error(getApiMessage(error, 'No se pudo actualizar el estado del empleado.'))
+    } finally {
+      setConfirmStatus(null)
     }
   }
+
+  const columns = useMemo<ColumnDef<EmployeeRecord>[]>(
+    () => [
+      {
+        accessorKey: 'fullName',
+        header: 'Empleado',
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium text-foreground">{row.original.fullName}</p>
+            <p className="text-xs text-muted-foreground">{row.original.email}</p>
+            <p className="text-xs text-muted-foreground">
+              DNI: {row.original.dni}
+            </p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'positionName',
+        header: 'Organización',
+        cell: ({ row }) => (
+          <div>
+            <p className="text-sm">{row.original.positionName}</p>
+            <p className="text-xs text-muted-foreground">{row.original.areaName}</p>
+            <p className="text-xs text-muted-foreground">{row.original.siteName}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Estado',
+        cell: ({ row }) => (
+          <div className="space-y-1">
+            <StatusBadge value={row.original.status} />
+            <p className="text-xs text-muted-foreground">{row.original.roleLabel}</p>
+          </div>
+        ),
+      },
+      {
+        id: 'actions',
+        header: '',
+        cell: ({ row }) => {
+          const employee = row.original
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navigate(`/app/employees/${employee.id}`)}>
+                  <Eye className="mr-2 size-3.5" /> Ver detalle
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => startEdit(employee)}>
+                  <PencilLine className="mr-2 size-3.5" /> Editar
+                </DropdownMenuItem>
+                {employee.status === 'ACTIVE' ? (
+                  <DropdownMenuItem
+                    onClick={() => handleStatusChange(employee, 'INACTIVE')}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <PowerOff className="mr-2 size-3.5" /> Desactivar
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => handleStatusChange(employee, 'ACTIVE')}>
+                    <Power className="mr-2 size-3.5" /> Activar
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
+        },
+      },
+    ],
+    [navigate, startEdit],
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -234,277 +340,211 @@ export function EmployeesPage() {
         title="Empleados"
         description="Gestiona la ficha principal del personal y su cuenta de acceso asociada al sistema."
         actions={
-          <Button type="button" onClick={resetForm}>
-            <Plus />
-            Nuevo
+          <Button onClick={openCreate}>
+            <Plus className="mr-1.5 size-4" />
+            Nuevo empleado
           </Button>
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_460px]">
-        <Card className="rounded-3xl">
-          <CardHeader className="gap-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="employees-search">Buscar</Label>
-                <Input
-                  id="employees-search"
-                  placeholder="Nombre, correo o DNI"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="employees-status">Estado</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger id="employees-status">
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    <SelectItem value="ACTIVE">Activos</SelectItem>
-                    <SelectItem value="INACTIVE">Inactivos</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <TableSkeleton rows={5} columns={4} />
-            ) : (
-              <DataTable
-                columns={[
-                  {
-                    key: 'employee',
-                    header: 'Empleado',
-                    render: (employee) => (
-                      <div>
-                        <p className="font-medium">{employee.fullName}</p>
-                        <p className="text-muted-foreground">{employee.email}</p>
-                        <p className="text-xs text-muted-foreground">
-                          DNI: {employee.dni} · Ingreso: {formatDate(employee.hireDate)}
-                        </p>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'organization',
-                    header: 'Organización',
-                    render: (employee) => (
-                      <div>
-                        <p>{employee.positionName}</p>
-                        <p className="text-muted-foreground">{employee.areaName}</p>
-                        <p className="text-xs text-muted-foreground">{employee.siteName}</p>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'status',
-                    header: 'Estado',
-                    render: (employee) => (
-                      <div className="space-y-2">
-                        <StatusBadge value={employee.status} />
-                        <p className="text-xs text-muted-foreground">{employee.roleLabel}</p>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'actions',
-                    header: 'Acciones',
-                    render: (employee) => (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigate(`/app/employees/${employee.id}`)}
-                        >
-                          <Eye />
-                          Ver
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => startEdit(employee)}>
-                          <PencilLine />
-                          Editar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            handleStatusChange(
-                              employee,
-                              employee.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
-                            )
-                          }
-                        >
-                          {employee.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}
-                        </Button>
-                      </div>
-                    ),
-                  },
-                ]}
-                rows={employees}
-                getRowKey={(employee) => employee.id}
-                emptyTitle="No hay empleados registrados"
-                emptyDescription="No existen empleados que coincidan con los filtros actuales."
-                emptyIcon={Users}
-                emptyAction={
-                  <Button type="button" onClick={resetForm}>
-                    <Plus />
-                    Registrar empleado
-                  </Button>
-                }
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        {loading ? (
-          <CardSkeleton header lines={6} />
-        ) : (
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>{editingId ? 'Editar empleado' : 'Nuevo empleado'}</CardTitle>
-            <CardDescription>Registra la ficha principal del colaborador y su usuario asociado.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="employee-name">Nombre completo</Label>
-                  <Input
-                    id="employee-name"
-                    value={form.fullName}
-                    onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
-                    placeholder="Nombre completo"
-                  />
-                  {errors.fullName ? <p className="text-xs text-destructive">{errors.fullName}</p> : null}
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="employee-email">Correo</Label>
-                  <Input
-                    id="employee-email"
-                    type="email"
-                    value={form.email}
-                    onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                    placeholder="correo@empresa.com"
-                  />
-                  {errors.email ? <p className="text-xs text-destructive">{errors.email}</p> : null}
-                </div>
-                {!editingId ? (
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="employee-password">Contraseña temporal</Label>
-                    <Input
-                      id="employee-password"
-                      type="password"
-                      value={form.password}
-                      onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                      placeholder="Mínimo 8 caracteres"
-                    />
-                    {errors.password ? <p className="text-xs text-destructive">{errors.password}</p> : null}
-                  </div>
-                ) : null}
-                <div className="space-y-2">
-                  <Label htmlFor="employee-role">Rol</Label>
-                  <Select
-                    value={form.role}
-                    onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}
-                  >
-                    <SelectTrigger id="employee-role">
-                      <SelectValue placeholder="Rol" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(ROLE_LABELS).map(([code, label]) => (
-                        <SelectItem key={code} value={code}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="employee-dni">DNI</Label>
-                  <Input
-                    id="employee-dni"
-                    value={form.dni}
-                    onChange={(event) => setForm((current) => ({ ...current, dni: event.target.value }))}
-                    placeholder="Documento de identidad"
-                  />
-                  {errors.dni ? <p className="text-xs text-destructive">{errors.dni}</p> : null}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="employee-phone">Teléfono</Label>
-                  <Input
-                    id="employee-phone"
-                    value={form.phone}
-                    onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
-                    placeholder="Teléfono de contacto"
-                  />
-                  {errors.phone ? <p className="text-xs text-destructive">{errors.phone}</p> : null}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="employee-hire-date">Fecha de ingreso</Label>
-                  <Input
-                    id="employee-hire-date"
-                    type="date"
-                    value={form.hireDate}
-                    onChange={(event) => setForm((current) => ({ ...current, hireDate: event.target.value }))}
-                  />
-                  {errors.hireDate ? <p className="text-xs text-destructive">{errors.hireDate}</p> : null}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="employee-position">Cargo</Label>
-                  <Select
-                    value={form.positionId}
-                    onValueChange={(value) => setForm((current) => ({ ...current, positionId: value }))}
-                  >
-                    <SelectTrigger id="employee-position">
-                      <SelectValue placeholder="Selecciona un cargo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {positions.map((position) => (
-                        <SelectItem key={position.id} value={String(position.id)}>
-                          {position.name} · {position.area.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.positionId ? <p className="text-xs text-destructive">{errors.positionId}</p> : null}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="employee-site">Sede</Label>
-                  <Select
-                    value={form.siteId}
-                    onValueChange={(value) => setForm((current) => ({ ...current, siteId: value }))}
-                  >
-                    <SelectTrigger id="employee-site">
-                      <SelectValue placeholder="Selecciona una sede" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sites.map((site) => (
-                        <SelectItem key={site.id} value={String(site.id)}>
-                          {site.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.siteId ? <p className="text-xs text-destructive">{errors.siteId}</p> : null}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Button disabled={saving} type="submit">
-                  {saving ? <Loader2 className="animate-spin" /> : null}
-                  {editingId ? 'Guardar cambios' : 'Registrar'}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  <RefreshCcw />
-                  Limpiar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-        )}
+      <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="relative flex-1">
+          <Input
+            placeholder="Buscar por nombre, correo o DNI"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-9 rounded-lg border-border/60"
+          />
+        </div>
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger className="h-9 w-full rounded-lg border-border/60 sm:w-44">
+            <SelectValue placeholder="Estado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Todos</SelectItem>
+            <SelectItem value="ACTIVE">Activos</SelectItem>
+            <SelectItem value="INACTIVE">Inactivos</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+
+      {loading ? (
+        <TableSkeleton rows={5} columns={4} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={employees}
+          searchPlaceholder="Buscar empleado..."
+          pageSize={10}
+          emptyState={
+            <EmptyState
+              icon={Users}
+              title="No hay empleados registrados"
+              description="No existen empleados que coincidan con los filtros actuales."
+              actionLabel="Registrar empleado"
+              onAction={openCreate}
+            />
+          }
+        />
+      )}
+
+      <EntityDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        title={editingId ? 'Editar empleado' : 'Nuevo empleado'}
+        description="Registra la ficha principal del colaborador y su usuario asociado."
+        size="lg"
+        footer={<EntityDrawerActions onCancel={() => setDrawerOpen(false)} isLoading={saving} />}
+      >
+        <form id="employee-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="employee-name">Nombre completo</Label>
+              <Input
+                id="employee-name"
+                value={form.fullName}
+                onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
+                placeholder="Nombre completo"
+                className="rounded-lg border-border/60"
+              />
+              {errors.fullName ? <p className="text-xs text-destructive">{errors.fullName}</p> : null}
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="employee-email">Correo</Label>
+              <Input
+                id="employee-email"
+                type="email"
+                value={form.email}
+                onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+                placeholder="correo@empresa.com"
+                className="rounded-lg border-border/60"
+              />
+              {errors.email ? <p className="text-xs text-destructive">{errors.email}</p> : null}
+            </div>
+            {!editingId ? (
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="employee-password">Contraseña temporal</Label>
+                <Input
+                  id="employee-password"
+                  type="password"
+                  value={form.password}
+                  onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                  placeholder="Mínimo 8 caracteres"
+                  className="rounded-lg border-border/60"
+                />
+                {errors.password ? <p className="text-xs text-destructive">{errors.password}</p> : null}
+              </div>
+            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="employee-role">Rol</Label>
+              <Select
+                value={form.role}
+                onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}
+              >
+                <SelectTrigger id="employee-role" className="rounded-lg border-border/60">
+                  <SelectValue placeholder="Rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ROLE_LABELS).map(([code, label]) => (
+                    <SelectItem key={code} value={code}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="employee-dni">DNI</Label>
+              <Input
+                id="employee-dni"
+                value={form.dni}
+                onChange={(event) => setForm((current) => ({ ...current, dni: event.target.value }))}
+                placeholder="Documento de identidad"
+                className="rounded-lg border-border/60"
+              />
+              {errors.dni ? <p className="text-xs text-destructive">{errors.dni}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="employee-phone">Teléfono</Label>
+              <Input
+                id="employee-phone"
+                value={form.phone}
+                onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+                placeholder="Teléfono de contacto"
+                className="rounded-lg border-border/60"
+              />
+              {errors.phone ? <p className="text-xs text-destructive">{errors.phone}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="employee-hire-date">Fecha de ingreso</Label>
+              <Input
+                id="employee-hire-date"
+                type="date"
+                value={form.hireDate}
+                onChange={(event) => setForm((current) => ({ ...current, hireDate: event.target.value }))}
+                className="rounded-lg border-border/60"
+              />
+              {errors.hireDate ? <p className="text-xs text-destructive">{errors.hireDate}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="employee-position">Cargo</Label>
+              <Select
+                value={form.positionId}
+                onValueChange={(value) => setForm((current) => ({ ...current, positionId: value }))}
+              >
+                <SelectTrigger id="employee-position" className="rounded-lg border-border/60">
+                  <SelectValue placeholder="Selecciona un cargo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {positions.map((position) => (
+                    <SelectItem key={position.id} value={String(position.id)}>
+                      {position.name} · {position.area.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.positionId ? <p className="text-xs text-destructive">{errors.positionId}</p> : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="employee-site">Sede</Label>
+              <Select
+                value={form.siteId}
+                onValueChange={(value) => setForm((current) => ({ ...current, siteId: value }))}
+              >
+                <SelectTrigger id="employee-site" className="rounded-lg border-border/60">
+                  <SelectValue placeholder="Selecciona una sede" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sites.map((site) => (
+                    <SelectItem key={site.id} value={String(site.id)}>
+                      {site.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.siteId ? <p className="text-xs text-destructive">{errors.siteId}</p> : null}
+            </div>
+          </div>
+          {saving && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> Guardando...
+            </div>
+          )}
+        </form>
+      </EntityDrawer>
+
+      <ConfirmDialog
+        open={confirmStatus !== null}
+        onOpenChange={() => setConfirmStatus(null)}
+        title={confirmStatus?.nextStatus === 'ACTIVE' ? 'Activar empleado' : 'Desactivar empleado'}
+        description={
+          confirmStatus?.nextStatus === 'ACTIVE'
+            ? `¿Deseas activar a ${confirmStatus?.employee.fullName}?`
+            : `¿Deseas desactivar a ${confirmStatus?.employee.fullName}?`
+        }
+        variant={confirmStatus?.nextStatus === 'INACTIVE' ? 'destructive' : 'default'}
+        onConfirm={confirmStatusChange}
+      />
     </div>
   )
 }

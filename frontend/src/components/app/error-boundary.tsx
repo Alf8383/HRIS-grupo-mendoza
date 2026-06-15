@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
   override render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-muted/40 px-6">
+        <div className="flex min-h-screen items-center justify-center bg-background px-6">
           <div className="flex max-w-sm flex-col gap-4 text-center">
             <p className="text-lg font-semibold text-foreground">
               Algo salió mal

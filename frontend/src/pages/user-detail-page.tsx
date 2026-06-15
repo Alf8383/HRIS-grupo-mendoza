@@ -60,7 +60,7 @@ export function UserDetailPage() {
         actions={
           <Button asChild type="button" variant="outline">
             <Link to="/app/users">
-              <ArrowLeft />
+              <ArrowLeft className="mr-1.5 size-4" />
               Volver
             </Link>
           </Button>
@@ -69,7 +69,7 @@ export function UserDetailPage() {
 
       {loading ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="rounded-3xl p-6">
+          <Card className="rounded-2xl border-border/60 p-6 shadow-sm">
             <Skeleton className="mb-4 h-8 w-64" />
             <Skeleton className="mb-6 h-4 w-48" />
             <div className="grid gap-5 md:grid-cols-2">
@@ -81,7 +81,7 @@ export function UserDetailPage() {
               ))}
             </div>
           </Card>
-          <Card className="rounded-3xl p-6">
+          <Card className="rounded-2xl border-border/60 p-6 shadow-sm">
             <Skeleton className="mb-4 h-8 w-48" />
             <Skeleton className="mb-6 h-4 w-56" />
             <div className="space-y-4">
@@ -97,7 +97,7 @@ export function UserDetailPage() {
         </div>
       ) : user ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="rounded-3xl">
+          <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle>{user.fullName}</CardTitle>
               <CardDescription>{user.email}</CardDescription>
@@ -106,14 +106,11 @@ export function UserDetailPage() {
               <DetailItem label="Rol" value={user.roleLabel} />
               <DetailItem label="Estado" value={<StatusBadge value={user.status} />} />
               <DetailItem label="Código de rol" value={user.role} />
-              <DetailItem
-                label="Cuenta vinculada"
-                value={user.employee ? 'Sí' : 'No'}
-              />
+              <DetailItem label="Cuenta vinculada" value={user.employee ? 'Sí' : 'No'} />
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl">
+          <Card className="rounded-2xl border-border/60 shadow-sm">
             <CardHeader>
               <CardTitle>Vinculación con empleado</CardTitle>
               <CardDescription>Resumen del registro asociado, si existe.</CardDescription>
@@ -139,7 +136,7 @@ export function UserDetailPage() {
           </Card>
         </div>
       ) : (
-        <Card className="rounded-3xl">
+        <Card className="rounded-2xl border-border/60 shadow-sm">
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
             No se encontró el usuario solicitado.
           </CardContent>

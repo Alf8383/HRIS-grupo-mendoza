@@ -1,21 +1,33 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Eye, Loader2, PencilLine, Plus, RefreshCcw, UserCircle } from 'lucide-react'
+import type { ColumnDef } from '@tanstack/react-table'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Eye,
+  Loader2,
+  MoreHorizontal,
+  PencilLine,
+  Plus,
+  Power,
+  PowerOff,
+  UserCircle,
+} from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { CardSkeleton } from '@/components/app/card-skeleton'
+import { ConfirmDialog } from '@/components/app/confirm-dialog'
 import { DataTable } from '@/components/app/data-table'
+import { EmptyState } from '@/components/app/empty-state'
+import { EntityDrawer, EntityDrawerActions } from '@/components/app/entity-drawer'
 import { PageHeader } from '@/components/app/page-header'
 import { TableSkeleton } from '@/components/app/table-skeleton'
 import { StatusBadge } from '@/components/app/status-badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -48,6 +60,7 @@ export function UsersPage() {
 
   const [users, setUsers] = useState<UserRecord[]>([])
   const [editingId, setEditingId] = useState<number | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [form, setForm] = useState(initialForm)
   const [errors, setErrors] = useState(initialErrors)
   const [search, setSearch] = useState('')
@@ -55,6 +68,10 @@ export function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [confirmStatus, setConfirmStatus] = useState<{
+    user: UserRecord
+    nextStatus: 'ACTIVE' | 'INACTIVE'
+  } | null>(null)
 
   const debouncedSearch = useDebounce(search, 400)
 
@@ -93,6 +110,11 @@ export function UsersPage() {
     setErrors(initialErrors)
   }
 
+  const openCreate = () => {
+    resetForm()
+    setDrawerOpen(true)
+  }
+
   const startEdit = (user: UserRecord) => {
     setEditingId(user.id)
     setForm({
@@ -102,6 +124,7 @@ export function UsersPage() {
       role: user.role,
     })
     setErrors(initialErrors)
+    setDrawerOpen(true)
   }
 
   const validateForm = (): boolean => {
@@ -149,6 +172,7 @@ export function UsersPage() {
       })
 
       toast.success(editingId ? 'Usuario actualizado correctamente.' : 'Usuario registrado correctamente.')
+      setDrawerOpen(false)
       resetForm()
       await loadUsers()
     } catch (error) {
@@ -159,18 +183,98 @@ export function UsersPage() {
   }
 
   const handleStatusChange = async (user: UserRecord, nextStatus: 'ACTIVE' | 'INACTIVE') => {
+    setConfirmStatus({ user, nextStatus })
+  }
+
+  const confirmStatusChange = async () => {
+    if (!confirmStatus) return
     try {
-      await apiRequest(`/users/${user.id}/status`, {
+      await apiRequest(`/users/${confirmStatus.user.id}/status`, {
         method: 'PATCH',
         token,
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({ status: confirmStatus.nextStatus }),
       })
-      toast.success(nextStatus === 'ACTIVE' ? 'Usuario activado correctamente.' : 'Usuario desactivado correctamente.')
+      toast.success(
+        confirmStatus.nextStatus === 'ACTIVE'
+          ? 'Usuario activado correctamente.'
+          : 'Usuario desactivado correctamente.',
+      )
       await loadUsers()
     } catch (error) {
       toast.error(getApiMessage(error, 'No se pudo actualizar el estado del usuario.'))
+    } finally {
+      setConfirmStatus(null)
     }
   }
+
+  const columns = useMemo<ColumnDef<UserRecord>[]>(
+    () => [
+      {
+        accessorKey: 'user',
+        header: 'Usuario',
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium text-foreground">{row.original.fullName}</p>
+            <p className="text-xs text-muted-foreground">{row.original.email}</p>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'role',
+        header: 'Rol',
+        cell: ({ row }) => (
+          <div className="flex flex-col gap-1">
+            <span>{row.original.roleLabel}</span>
+            <span className="text-xs text-muted-foreground">
+              {row.original.linkedEmployee ? 'Vinculado a empleado' : 'Cuenta independiente'}
+            </span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: 'status',
+        header: 'Estado',
+        cell: ({ row }) => <StatusBadge value={row.original.status} />,
+      },
+      {
+        id: 'actions',
+        header: '',
+        cell: ({ row }) => {
+          const user = row.original
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="size-8">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navigate(`/app/users/${user.id}`)}>
+                  <Eye className="mr-2 size-3.5" /> Ver detalle
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => startEdit(user)}>
+                  <PencilLine className="mr-2 size-3.5" /> Editar
+                </DropdownMenuItem>
+                {user.status === 'ACTIVE' ? (
+                  <DropdownMenuItem
+                    onClick={() => handleStatusChange(user, 'INACTIVE')}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <PowerOff className="mr-2 size-3.5" /> Desactivar
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onClick={() => handleStatusChange(user, 'ACTIVE')}>
+                    <Power className="mr-2 size-3.5" /> Activar
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
+        },
+      },
+    ],
+    [navigate],
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -178,216 +282,169 @@ export function UsersPage() {
         title="Usuarios"
         description="Administra las cuentas internas del sistema, su rol operativo y su disponibilidad de acceso."
         actions={
-          <Button type="button" onClick={resetForm}>
-            <Plus />
-            Nuevo
+          <Button onClick={openCreate}>
+            <Plus className="mr-1.5 size-4" />
+            Nuevo usuario
           </Button>
         }
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_420px]">
-        <Card className="rounded-3xl">
-          <CardHeader className="gap-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="users-search">Buscar</Label>
-                <Input
-                  id="users-search"
-                  placeholder="Nombre o correo"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="users-status">Estado</Label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger id="users-status">
-                    <SelectValue placeholder="Estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    <SelectItem value="ACTIVE">Activos</SelectItem>
-                    <SelectItem value="INACTIVE">Inactivos</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="users-role">Rol</Label>
-                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                  <SelectTrigger id="users-role">
-                    <SelectValue placeholder="Rol" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    {Object.entries(ROLE_LABELS).map(([code, label]) => (
-                      <SelectItem key={code} value={code}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <TableSkeleton rows={5} columns={4} />
-            ) : (
-              <DataTable
-                columns={[
-                  {
-                    key: 'user',
-                    header: 'Usuario',
-                    render: (user) => (
-                      <div>
-                        <p className="font-medium">{user.fullName}</p>
-                        <p className="text-muted-foreground">{user.email}</p>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'role',
-                    header: 'Rol',
-                    render: (user) => (
-                      <div className="flex flex-col gap-1">
-                        <span>{user.roleLabel}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {user.linkedEmployee ? 'Vinculado a empleado' : 'Cuenta independiente'}
-                        </span>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: 'status',
-                    header: 'Estado',
-                    render: (user) => <StatusBadge value={user.status} />,
-                  },
-                  {
-                    key: 'actions',
-                    header: 'Acciones',
-                    render: (user) => (
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => navigate(`/app/users/${user.id}`)}
-                        >
-                          <Eye />
-                          Ver
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => startEdit(user)}>
-                          <PencilLine />
-                          Editar
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            handleStatusChange(
-                              user,
-                              user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
-                            )
-                          }
-                        >
-                          {user.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}
-                        </Button>
-                      </div>
-                    ),
-                  },
-                ]}
-                rows={users}
-                getRowKey={(user) => user.id}
-                emptyTitle="No hay usuarios registrados"
-                emptyDescription="No existen usuarios que coincidan con los filtros actuales."
-                emptyIcon={UserCircle}
-                emptyAction={
-                  <Button type="button" onClick={resetForm}>
-                    <Plus />
-                    Crear usuario
-                  </Button>
-                }
+      <Card className="rounded-2xl border-border/60 shadow-sm">
+        <CardHeader className="gap-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="space-y-2">
+              <Label htmlFor="users-search">Buscar</Label>
+              <Input
+                id="users-search"
+                placeholder="Nombre o correo"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="rounded-lg border-border/60"
               />
-            )}
-          </CardContent>
-        </Card>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="users-status">Estado</Label>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger id="users-status" className="rounded-lg border-border/60">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todos</SelectItem>
+                  <SelectItem value="ACTIVE">Activos</SelectItem>
+                  <SelectItem value="INACTIVE">Inactivos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="users-role">Rol</Label>
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger id="users-role" className="rounded-lg border-border/60">
+                  <SelectValue placeholder="Rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todos</SelectItem>
+                  {Object.entries(ROLE_LABELS).map(([code, label]) => (
+                    <SelectItem key={code} value={code}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <TableSkeleton rows={5} columns={4} />
+          ) : (
+            <DataTable
+              columns={columns}
+              data={users}
+              searchPlaceholder="Buscar usuario..."
+              pageSize={10}
+              emptyState={
+                <EmptyState
+                  icon={UserCircle}
+                  title="No hay usuarios registrados"
+                  description="No existen usuarios que coincidan con los filtros actuales."
+                  actionLabel="Crear usuario"
+                  onAction={openCreate}
+                />
+              }
+            />
+          )}
+        </CardContent>
+      </Card>
 
-        {loading ? (
-          <CardSkeleton header lines={4} />
-        ) : (
-        <Card className="rounded-3xl">
-          <CardHeader>
-            <CardTitle>{editingId ? 'Editar usuario' : 'Nuevo usuario'}</CardTitle>
-            <CardDescription>Define la cuenta de acceso y el rol operativo del usuario.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleSubmit}>
-              <div className="space-y-2">
-                <Label htmlFor="user-name">Nombre completo</Label>
-                <Input
-                  id="user-name"
-                  value={form.fullName}
-                  onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
-                  placeholder="Ingresa el nombre completo"
-                />
-                {errors.fullName ? <p className="text-xs text-destructive">{errors.fullName}</p> : null}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="user-email">Correo</Label>
-                <Input
-                  id="user-email"
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                  placeholder="correo@empresa.com"
-                />
-                {errors.email ? <p className="text-xs text-destructive">{errors.email}</p> : null}
-              </div>
-              {!editingId ? (
-                <div className="space-y-2">
-                  <Label htmlFor="user-password">Contraseña temporal</Label>
-                  <Input
-                    id="user-password"
-                    type="password"
-                    value={form.password}
-                    onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                    placeholder="Mínimo 8 caracteres"
-                  />
-                  {errors.password ? <p className="text-xs text-destructive">{errors.password}</p> : null}
-                </div>
-              ) : null}
-              <div className="space-y-2">
-                <Label htmlFor="user-role">Rol</Label>
-                <Select
-                  value={form.role}
-                  onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}
-                >
-                  <SelectTrigger id="user-role">
-                    <SelectValue placeholder="Rol" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(ROLE_LABELS).map(([code, label]) => (
-                      <SelectItem key={code} value={code}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Button disabled={saving} type="submit">
-                  {saving ? <Loader2 className="animate-spin" /> : null}
-                  {editingId ? 'Guardar cambios' : 'Registrar'}
-                </Button>
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  <RefreshCcw />
-                  Limpiar
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-        )}
-      </div>
+      <EntityDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        title={editingId ? 'Editar usuario' : 'Nuevo usuario'}
+        description="Define la cuenta de acceso y el rol operativo del usuario."
+        size="md"
+        footer={<EntityDrawerActions onCancel={() => setDrawerOpen(false)} isLoading={saving} />}
+      >
+        <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="user-name">Nombre completo</Label>
+            <Input
+              id="user-name"
+              value={form.fullName}
+              onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
+              placeholder="Ingresa el nombre completo"
+              className="rounded-lg border-border/60"
+            />
+            {errors.fullName ? <p className="text-xs text-destructive">{errors.fullName}</p> : null}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="user-email">Correo</Label>
+            <Input
+              id="user-email"
+              type="email"
+              value={form.email}
+              onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+              placeholder="correo@empresa.com"
+              className="rounded-lg border-border/60"
+            />
+            {errors.email ? <p className="text-xs text-destructive">{errors.email}</p> : null}
+          </div>
+          {!editingId ? (
+            <div className="space-y-2">
+              <Label htmlFor="user-password">Contraseña temporal</Label>
+              <Input
+                id="user-password"
+                type="password"
+                value={form.password}
+                onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+                placeholder="Mínimo 8 caracteres"
+                className="rounded-lg border-border/60"
+              />
+              {errors.password ? <p className="text-xs text-destructive">{errors.password}</p> : null}
+            </div>
+          ) : null}
+          <div className="space-y-2">
+            <Label htmlFor="user-role">Rol</Label>
+            <Select value={form.role} onValueChange={(value) => setForm((current) => ({ ...current, role: value }))}>
+              <SelectTrigger id="user-role" className="rounded-lg border-border/60">
+                <SelectValue placeholder="Rol" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(ROLE_LABELS).map(([code, label]) => (
+                  <SelectItem key={code} value={code}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {saving && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" /> Guardando...
+            </div>
+          )}
+        </form>
+      </EntityDrawer>
+
+      <ConfirmDialog
+        open={confirmStatus !== null}
+        onOpenChange={() => setConfirmStatus(null)}
+        title={
+          confirmStatus
+            ? confirmStatus.nextStatus === 'ACTIVE'
+              ? 'Activar usuario'
+              : 'Desactivar usuario'
+            : ''
+        }
+        description={
+          confirmStatus
+            ? confirmStatus.nextStatus === 'ACTIVE'
+              ? `¿Deseas activar a ${confirmStatus.user.fullName}?`
+              : `¿Deseas desactivar a ${confirmStatus.user.fullName}?`
+            : ''
+        }
+        variant={confirmStatus?.nextStatus === 'INACTIVE' ? 'destructive' : 'default'}
+        onConfirm={confirmStatusChange}
+      />
     </div>
   )
 }

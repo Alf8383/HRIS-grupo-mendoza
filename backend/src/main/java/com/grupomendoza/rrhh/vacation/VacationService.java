@@ -38,13 +38,13 @@ public class VacationService {
         this.userRepository = userRepository;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public VacationBalanceResponse getOwnBalance(AuthenticatedUser currentUser) {
         Employee employee = requireCurrentEmployee(currentUser);
         return toBalanceResponse(loadOrCreateBalance(employee));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public VacationBalanceResponse getBalance(Long employeeId) {
         Employee employee = findEmployee(employeeId);
         return toBalanceResponse(loadOrCreateBalance(employee));

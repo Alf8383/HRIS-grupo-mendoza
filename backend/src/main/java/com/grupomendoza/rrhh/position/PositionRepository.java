@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 public interface PositionRepository extends JpaRepository<Position, Long> {
     boolean existsByAreaIdAndNameIgnoreCase(Long areaId, String name);
 
+    Optional<Position> findByAreaIdAndNameIgnoreCase(Long areaId, String name);
+
     @Query("""
             select p
             from Position p

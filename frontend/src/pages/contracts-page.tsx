@@ -99,6 +99,7 @@ export function ContractsPage() {
   const [documents, setDocuments] = useState<ContractDocumentRecord[]>([])
   const [loadingDocuments, setLoadingDocuments] = useState(false)
   const [uploadingDocument, setUploadingDocument] = useState(false)
+  const [contractFile, setContractFile] = useState<File | null>(null)
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false)
 
@@ -184,6 +185,7 @@ export function ContractsPage() {
   const resetForm = () => {
     setFormMode('create')
     setEditingContractId(null)
+    setContractFile(null)
     setForm({
       ...initialForm,
       employeeId: selectedEmployeeId !== 'ALL' ? selectedEmployeeId : '',
@@ -198,6 +200,7 @@ export function ContractsPage() {
   const startEdit = (contract: ContractRecord) => {
     setFormMode('edit')
     setEditingContractId(contract.id)
+    setContractFile(null)
     setForm({
       employeeId: String(contract.employeeId),
       contractType: contract.contractType,
@@ -212,6 +215,7 @@ export function ContractsPage() {
   const startRenew = (contract: ContractRecord) => {
     setFormMode('renew')
     setEditingContractId(contract.id)
+    setContractFile(null)
     setForm({
       employeeId: String(contract.employeeId),
       contractType: contract.contractType,
@@ -236,9 +240,10 @@ export function ContractsPage() {
         status: form.status,
         notes: form.notes || null,
       }
+      let savedContract: ContractRecord | null = null
 
       if (formMode === 'edit' && editingContractId) {
-        await apiRequest(`/contracts/${editingContractId}`, {
+        savedContract = await apiRequest<ContractRecord>(`/contracts/${editingContractId}`, {
           method: 'PUT',
           token,
           body: JSON.stringify({
@@ -251,7 +256,7 @@ export function ContractsPage() {
         })
         toast.success('Contrato actualizado.')
       } else if (formMode === 'renew' && editingContractId) {
-        await apiRequest(`/contracts/${editingContractId}/renew`, {
+        savedContract = await apiRequest<ContractRecord>(`/contracts/${editingContractId}/renew`, {
           method: 'POST',
           token,
           body: JSON.stringify({
@@ -264,12 +269,33 @@ export function ContractsPage() {
         })
         toast.success('Contrato renovado.')
       } else {
-        await apiRequest('/contracts', {
+        savedContract = await apiRequest<ContractRecord>('/contracts', {
           method: 'POST',
           token,
           body: JSON.stringify(payload),
         })
         toast.success('Contrato registrado.')
+      }
+
+      if (contractFile && savedContract && formMode !== 'edit') {
+        const fileData = new FormData()
+        fileData.append('file', contractFile)
+
+        try {
+          await apiRequest<ContractDocumentRecord>(
+            `/contracts/${savedContract.id}/documents`,
+            {
+              method: 'POST',
+              token,
+              body: fileData,
+            },
+          )
+          toast.success('Documento del contrato cargado.')
+        } catch (error) {
+          toast.error(
+            `El contrato fue guardado, pero no se pudo cargar el documento: ${getApiMessage(error, 'error desconocido')}`,
+          )
+        }
       }
 
       setDrawerOpen(false)
@@ -757,6 +783,30 @@ export function ContractsPage() {
               className="rounded-lg border-border/60"
             />
           </div>
+
+          {formMode !== 'edit' ? (
+            <div className="space-y-2">
+              <Label htmlFor="contract-file">Archivo del contrato</Label>
+              <Input
+                id="contract-file"
+                type="file"
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                disabled={saving}
+                onChange={(event) => {
+                  setContractFile(event.target.files?.[0] ?? null)
+                }}
+                className="rounded-lg border-border/60"
+              />
+              <p className="text-xs text-muted-foreground">
+                Opcional. Adjunta el contrato firmado en PDF, Word o imagen. Tamaño máximo: 10 MB.
+              </p>
+              {contractFile ? (
+                <p className="truncate text-xs text-muted-foreground">
+                  Archivo seleccionado: {contractFile.name} ({formatFileSize(contractFile.size)})
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
           {saving && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">

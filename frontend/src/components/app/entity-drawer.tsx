@@ -40,13 +40,18 @@ export function EntityDrawer({
 }: EntityDrawerProps) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className={cn('flex max-h-[92vh] flex-col overflow-hidden px-0', sizeClasses[size])}>
+      <DrawerContent
+        className={cn(
+          'flex flex-col overflow-hidden px-0 data-[vaul-drawer-direction=bottom]:max-h-[92vh]',
+          sizeClasses[size],
+        )}
+      >
         <DrawerHeader className="shrink-0 px-6 pb-2 text-left">
           <DrawerTitle className="text-lg font-semibold">{title}</DrawerTitle>
           {description && <DrawerDescription className="text-sm">{description}</DrawerDescription>}
         </DrawerHeader>
         <ScrollArea className="min-h-0 flex-1 px-6">
-          <div className="pb-4 pt-2">{children}</div>
+          <div className="pb-5 pt-2">{children}</div>
         </ScrollArea>
         {footer && (
           <DrawerFooter className="shrink-0 flex-row justify-end gap-2 border-t border-border/60 bg-background px-6 py-4">

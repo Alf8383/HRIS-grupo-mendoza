@@ -311,7 +311,13 @@ export function CatalogManagementPage({
         title={editingId ? `Editar ${itemLabel.toLowerCase()}` : `Nuevo ${itemLabel.toLowerCase()}`}
         description="Completa la información principal del registro."
         size="md"
-        footer={<EntityDrawerActions onCancel={() => setDrawerOpen(false)} isLoading={saving} />}
+        footer={
+          <EntityDrawerActions
+            onCancel={() => setDrawerOpen(false)}
+            isLoading={saving}
+            form="catalog-form"
+          />
+        }
       >
         <form id="catalog-form" onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

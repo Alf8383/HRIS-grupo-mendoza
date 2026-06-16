@@ -399,7 +399,13 @@ export function EmployeesPage() {
         title={editingId ? 'Editar empleado' : 'Nuevo empleado'}
         description="Registra la ficha principal del colaborador y su usuario asociado."
         size="lg"
-        footer={<EntityDrawerActions onCancel={() => setDrawerOpen(false)} isLoading={saving} />}
+        footer={
+          <EntityDrawerActions
+            onCancel={() => setDrawerOpen(false)}
+            isLoading={saving}
+            form="employee-form"
+          />
+        }
       >
         <form id="employee-form" onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">

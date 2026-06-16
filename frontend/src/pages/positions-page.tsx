@@ -323,7 +323,13 @@ export function PositionsPage() {
         title={editingId ? 'Editar cargo' : 'Nuevo cargo'}
         description="Define el área asociada al cargo y su información principal."
         size="md"
-        footer={<EntityDrawerActions onCancel={() => setDrawerOpen(false)} isLoading={saving} />}
+        footer={
+          <EntityDrawerActions
+            onCancel={() => setDrawerOpen(false)}
+            isLoading={saving}
+            form="position-form"
+          />
+        }
       >
         <form id="position-form" onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

@@ -362,7 +362,13 @@ export function UsersPage() {
         title={editingId ? 'Editar usuario' : 'Nuevo usuario'}
         description="Define la cuenta de acceso y el rol operativo del usuario."
         size="md"
-        footer={<EntityDrawerActions onCancel={() => setDrawerOpen(false)} isLoading={saving} />}
+        footer={
+          <EntityDrawerActions
+            onCancel={() => setDrawerOpen(false)}
+            isLoading={saving}
+            form="user-form"
+          />
+        }
       >
         <form id="user-form" onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

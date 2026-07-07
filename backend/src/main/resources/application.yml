@@ -32,10 +32,16 @@ app:
       email: ${APP_SEED_ADMIN_EMAIL:admin@grupomendoza.com}
       password: ${APP_SEED_ADMIN_PASSWORD:Admin12345!}
     admin-secondary:
-      enabled: ${APP_SEED_ADMIN_SECONDARY_ENABLED:true}
+      enabled: ${APP_SEED_ADMIN_SECONDARY_ENABLED:false}
       full-name: ${APP_SEED_ADMIN_SECONDARY_FULL_NAME:Administrador Secundario}
       email: ${APP_SEED_ADMIN_SECONDARY_EMAIL:admin2@grupomendoza.com}
       password: ${APP_SEED_ADMIN_SECONDARY_PASSWORD:Admin12345!}
+    admin-third:
+      enabled: ${APP_SEED_ADMIN_THIRD_ENABLED:true}
+      remove-legacy-admin2: ${APP_SEED_ADMIN_THIRD_REMOVE_LEGACY_ADMIN2:true}
+      full-name: ${APP_SEED_ADMIN_THIRD_FULL_NAME:Administrador 3}
+      email: ${APP_SEED_ADMIN_THIRD_EMAIL:admin3@grupomendoza.com}
+      password: ${APP_SEED_ADMIN_THIRD_PASSWORD:Admin12345!}
     users:
       hr-enabled: ${APP_SEED_HR_ENABLED:true}
       hr-full-name: ${APP_SEED_HR_FULL_NAME:Recursos Humanos Semilla}
@@ -52,3 +58,6 @@ app:
     demo:
       enabled: ${APP_SEED_DEMO_ENABLED:false}
       default-password: ${APP_SEED_DEMO_DEFAULT_PASSWORD:Demo12345!}
+    fixed-term-contracts:
+      enabled: ${APP_SEED_FIXED_TERM_CONTRACTS_ENABLED:true}
+      default-password: ${APP_SEED_FIXED_TERM_CONTRACTS_DEFAULT_PASSWORD:Trabajador123!}
